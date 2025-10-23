@@ -146,11 +146,19 @@ Console.WriteLine(response.Choices[0].Message.Content?.ToString() ?? "No respons
 Check out the [samples/](samples/) directory for complete working examples:
 
 - **[BasicCliSample](samples/BasicCliSample/)** - Interactive CLI to list models and chat with streaming
+- **[OpenRouterWebApiSample](samples/OpenRouterWebApiSample/)** - ASP.NET Core Web API showcasing all SDK features including streaming, tools, artifacts, and multimodal
 
 To run a sample:
 ```bash
 export OPENROUTER_API_KEY="your-key-here"
 cd samples/BasicCliSample
+dotnet run
+```
+
+Or for the Web API sample:
+```bash
+export OPENROUTER_API_KEY="your-key-here"
+cd samples/OpenRouterWebApiSample
 dotnet run
 ```
 
