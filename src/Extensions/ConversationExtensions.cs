@@ -80,7 +80,7 @@ public static class ConversationExtensions
             return history.Count;
         }
         
-        return history.Count(m => m.Role.Equals(role, StringComparison.OrdinalIgnoreCase));
+        return history.Count(m => m.Role?.Equals(role, StringComparison.OrdinalIgnoreCase) == true);
     }
 }
 
