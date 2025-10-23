@@ -25,6 +25,10 @@ Or via NuGet Package Manager:
 Install-Package OpenRouter.NET
 ```
 
+## For LLMs
+
+Want to use this SDK with your LLM? Check out [`llms.txt`](llms.txt) - give this file to your LLM of choice and it will be ready to implement features with OpenRouter.NET for you!
+
 ## Quick Start
 
 ### Basic Usage
