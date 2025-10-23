@@ -1,0 +1,14 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "OpenRouter": {
+    "ApiKey": "your-openrouter-api-key-here",
+    "SiteUrl": "https://your-site.com",
+    "SiteName": "Your Application Name"
+  }
+}
