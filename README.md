@@ -78,6 +78,54 @@ await foreach (var chunk in client.StreamAsync(request))
 }
 ```
 
+### SSE Streaming (for Web APIs)
+
+Perfect for building real-time streaming endpoints that work with browsers:
+
+```csharp
+using OpenRouter.NET;
+using OpenRouter.NET.Sse;
+using OpenRouter.NET.Models;
+
+// In your ASP.NET endpoint
+app.MapPost("/api/chat/stream", async (HttpContext context) =>
+{
+    var client = new OpenRouterClient("your-api-key");
+    
+    var request = new ChatCompletionRequest
+    {
+        Model = "anthropic/claude-3.5-sonnet",
+        Messages = new List<Message>
+        {
+            Message.FromUser("Tell me a story")
+        }
+    };
+
+    // One line to stream everything as SSE!
+    await client.StreamAsSseAsync(request, context.Response);
+});
+```
+
+This automatically handles:
+- ✅ Text deltas
+- ✅ Tool calls (server-side and client-side)
+- ✅ Artifacts (started, content, completed)
+- ✅ Completion events
+- ✅ Proper SSE formatting
+- ✅ Headers and connection management
+
+**Event types sent:**
+- `text` - Text content deltas
+- `tool_executing` - Tool starting
+- `tool_completed` - Tool finished with result
+- `tool_error` - Tool failed
+- `tool_client` - Client-side tool call requested
+- `artifact_started` - Artifact beginning
+- `artifact_content` - Artifact content chunk
+- `artifact_completed` - Artifact finished
+- `completion` - Stream finished
+- `error` - Error occurred
+
 ### Artifacts
 
 ```csharp
