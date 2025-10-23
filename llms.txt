@@ -1,0 +1,1689 @@
+OPENROUTER.NET SDK - COMPREHENSIVE USAGE GUIDE
+================================================
+
+This document provides a complete reference for using the OpenRouter.NET SDK, including all patterns, 
+configuration options, and advanced features.
+
+VERSION: 0.1.0
+NAMESPACE ROOT: OpenRouter.NET
+
+================================================================================
+1. CORE CLIENT USAGE PATTERNS
+================================================================================
+
+1.1 INITIALIZATION & CONFIGURATION
+-----------------------------------
+
+The SDK requires an API key from OpenRouter (https://openrouter.ai).
+
+Option A - Minimal initialization:
+---
+var client = new OpenRouterClient("your-api-key");
+---
+
+Option B - Full configuration:
+---
+var options = new OpenRouterClientOptions
+{
+    ApiKey = "your-api-key",
+    SiteUrl = "https://yourapp.com",           // Optional: Used for HTTP-Referer header
+    SiteName = "My App",                        // Optional: Used for X-Title header
+    BaseUrl = "https://openrouter.ai/api/v1",  // Default: OpenRouter production URL
+    HttpClient = new HttpClient(),              // Optional: Provide custom HttpClient
+    OnLogMessage = message => Console.WriteLine(message)  // Optional: Logging callback
+};
+
+var client = new OpenRouterClient(options);
+---
+
+Key Configuration Properties:
+- ApiKey (required): Your OpenRouter API key
+- SiteUrl (optional): Your application's URL - sent to OpenRouter for tracking
+- SiteName (optional): Your application's name - sent to OpenRouter for tracking
+- BaseUrl: Can override for testing or custom endpoints (default: https://openrouter.ai/api/v1)
+- HttpClient: Share an existing HttpClient or let SDK create one
+- OnLogMessage: Callback for debug logging from the SDK
+
+Important Notes:
+- The SDK manages HttpClient disposal by default if not provided
+- If you provide your own HttpClient, you're responsible for disposal
+- Always dispose OpenRouterClient when done: client.Dispose()
+- Thread-safe for concurrent requests
+
+1.2 PUBLIC METHODS (NON-STREAMING)
+-----------------------------------
+
+CreateChatCompletionAsync(request, cancellationToken)
+- Purpose: Send a non-streaming chat completion request
+- Returns: Task<ChatCompletionResponse>
+- Throws: OpenRouterException and subtypes on API errors
+- Usage: For simple request-response patterns where streaming isn't needed
+- Example:
+  ---
+  var response = await client.CreateChatCompletionAsync(
+      new ChatCompletionRequest
+      {
+          Model = "openai/gpt-4",
+          Messages = new List<Message>
+          {
+              Message.FromSystem("You are a helpful assistant."),
+              Message.FromUser("Hello!")
+          }
+      }
+  );
+  var content = response.GetContent();
+  ---
+
+GetModelsAsync(cancellationToken)
+- Purpose: Fetch list of available models from OpenRouter
+- Returns: Task<List<ModelInfo>>
+- Note: This is an expensive operation - cache results when possible
+- Each ModelInfo contains: Id, Name, ContextLength, Architecture, etc.
+
+GetLimitsAsync(cancellationToken)
+- Purpose: Get your account limits and usage statistics
+- Returns: Task<UserLimits>
+- Contains: Rate limit info, remaining requests, quota usage
+
+GetGenerationAsync(generationId, cancellationToken)
+- Purpose: Retrieve metadata about a specific generation
+- Returns: Task<GenerationInfo>
+- Note: Requires the generation ID returned in responses
+
+ProcessMessageAsync(request, maxToolCalls, cancellationToken)
+- Purpose: High-level method that handles tool calling loops with events
+- Returns: Task<(ChatCompletionResponse, List<Message>)>
+- Raises StreamEventArgs events: StateChange, TextContent, ToolCall, ToolResult, Error
+- Auto-loops for tool calls up to maxToolCalls iterations
+- Fires OnStreamEvent event for each state change
+
+1.3 RESOURCE MANAGEMENT
+-----------------------
+
+Proper cleanup:
+---
+using var client = new OpenRouterClient(apiKey);
+var response = await client.CreateChatCompletionAsync(request);
+// Automatically disposed when exiting using block
+---
+
+Or explicit disposal:
+---
+var client = new OpenRouterClient(apiKey);
+try
+{
+    var response = await client.CreateChatCompletionAsync(request);
+}
+finally
+{
+    client.Dispose();
+}
+---
+
+================================================================================
+2. REQUEST/RESPONSE PATTERNS
+================================================================================
+
+2.1 CONSTRUCTING CHAT COMPLETION REQUESTS
+-------------------------------------------
+
+Basic structure:
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",              // Required: Model identifier
+    Messages = new List<Message>
+    {
+        Message.FromSystem("You are helpful."),
+        Message.FromUser("What is 2+2?")
+    },
+    Temperature = 0.7f,                   // Optional: 0-2, default ~1
+    MaxTokens = 1000,                     // Optional: Max completion tokens
+    TopP = 0.9f,                          // Optional: Nucleus sampling
+    TopK = 40,                            // Optional: Top-k sampling
+    Stream = true                         // Optional: Enable streaming (default for StreamAsync)
+};
+---
+
+Core Properties:
+- Model (string): Model identifier like "openai/gpt-4o", "anthropic/claude-3.5-sonnet"
+- Messages (List<Message>): Conversation history, order matters
+- Temperature (float?): Randomness 0=deterministic, 2=creative
+- MaxTokens (int?): Limit on completion length
+- TopP (float?): Nucleus sampling parameter
+- TopK (int?): Limit to top K most likely tokens
+- FrequencyPenalty (float?): Penalize frequently used tokens
+- PresencePenalty (float?): Penalize repeated content
+- RepetitionPenalty (float?): Additional repetition control
+- Seed (int?): For reproducible outputs
+- Stop (object?): Stop sequence(s) - string or array of strings
+- ResponseFormat (ResponseFormat?): Set type="json_object" for JSON mode
+- Tools (List<Tool>?): Available tools (auto-added if registered with client)
+- ToolChoice (object?): Control tool calling - "auto", "none", or specific tool
+- Provider (object?): Route to specific provider
+- Route (string?): Routing preference
+- Models (List<string>?): Fallback model list for load balancing
+- Transforms (List<string>?): Apply transformations
+- LogitBias (Dictionary<int, float>?): Adjust token probabilities
+- TopLogprobs (int?): Include token probabilities
+- MinP (float?): Minimum probability sampling
+- TopA (float?): Top-a sampling threshold
+- Prediction (Prediction?): Prefix for faster completion
+- ToolLoopConfig (ToolLoopConfig?): Configure automatic tool calling
+
+2.2 MESSAGE CONSTRUCTION HELPERS
+---------------------------------
+
+Static factory methods on Message class:
+
+User message (text):
+---
+var msg = Message.FromUser("What is AI?");
+---
+
+User message (multimodal with images):
+---
+var msg = Message.FromUser(new List<ContentPart>
+{
+    new TextContent("What's in this image?"),
+    new ImageContent("https://example.com/image.jpg", detail: "high")
+});
+---
+
+System message:
+---
+var msg = Message.FromSystem("You are a Python expert. Format all code in markdown blocks.");
+---
+
+Assistant message:
+---
+var msg = Message.FromAssistant("Here's my response");
+---
+
+Tool result message:
+---
+var msg = Message.FromTool("{"result": "success"}", toolCallId: "call_123");
+---
+
+Direct construction:
+---
+var msg = new Message
+{
+    Role = "user",
+    Content = "Hello",
+    Name = "UserName"  // Optional: identifies this speaker
+};
+---
+
+Multimodal content types:
+
+TextContent:
+- Properties: Text (string)
+- Type property returns "text"
+
+ImageContent:
+- Properties: ImageUrl (object with Url and Detail)
+- Detail values: "auto", "low", "high"
+- URL can be: https://, data:image/base64, or file path
+- Type property returns "image_url"
+
+Important notes:
+- Message.Content can be string, List<ContentPart>, or null
+- Tool messages (Role="tool") must include ToolCallId
+- Messages are processed in order in the list
+- Always include system message as first message for best results
+
+2.3 RESPONSE NAVIGATION AND EXTRACTION
+---------------------------------------
+
+ChatCompletionResponse structure:
+- Id (string): Unique response identifier
+- Model (string): Model that generated response
+- Object (string): Always "chat.completion"
+- Created (long): Unix timestamp
+- SystemFingerprint (string?): Fingerprint for reproducibility
+- Choices (List<Choice>): Array of completions
+- Usage (ResponseUsage?): Token counts
+
+Accessing response content:
+
+Get first completion:
+---
+var response = await client.CreateChatCompletionAsync(request);
+var content = response.Choices?[0].Message?.Content?.ToString();
+---
+
+Using extension method:
+---
+var content = response.GetContent();  // string?
+var message = response.GetMessage();  // Message?
+var reason = response.GetFinishReason();  // string?
+---
+
+Check for tool calls:
+---
+if (response.HasToolCalls())
+{
+    var toolCalls = response.GetToolCalls();
+    foreach (var call in toolCalls)
+    {
+        var toolName = call.Function?.Name;
+        var arguments = call.Function?.Arguments;  // JSON string
+    }
+}
+---
+
+Access token usage:
+---
+var usage = response.Usage;
+var totalTokens = usage?.TotalTokens;  // Total tokens used
+var promptTokens = usage?.PromptTokens;  // Input tokens
+var completionTokens = usage?.CompletionTokens;  // Output tokens
+---
+
+Choice properties:
+- Index (int): Position in choices array
+- Message (Message?): The response message
+- FinishReason (string?): "stop", "length", "tool_calls", etc.
+
+2.4 ERROR HANDLING & EXCEPTION TYPES
+-------------------------------------
+
+Exception hierarchy:
+
+OpenRouterException (base)
+├─ OpenRouterAuthException (401)
+├─ OpenRouterRateLimitException (429)
+├─ OpenRouterBadRequestException (400)
+├─ OpenRouterModelNotFoundException (404)
+└─ OpenRouterServerException (500+)
+
+Handling specific errors:
+
+Rate limiting:
+---
+try
+{
+    var response = await client.CreateChatCompletionAsync(request);
+}
+catch (OpenRouterRateLimitException ex)
+{
+    var retryAfter = ex.RetryAfterSeconds;  // seconds to wait
+    await Task.Delay(TimeSpan.FromSeconds(retryAfter ?? 60));
+    // Retry request
+}
+---
+
+Authentication:
+---
+catch (OpenRouterAuthException ex)
+{
+    Console.WriteLine("Invalid API key: " + ex.Message);
+}
+---
+
+Model not found:
+---
+catch (OpenRouterModelNotFoundException ex)
+{
+    Console.WriteLine($"Model {ex.ModelId} not available");
+}
+---
+
+Generic error handling:
+---
+catch (OpenRouterException ex)
+{
+    var statusCode = ex.StatusCode;  // HTTP status code
+    var errorCode = ex.ErrorCode;    // Error code if provided
+    Console.WriteLine($"API Error: {ex.Message}");
+}
+---
+
+Exception properties:
+- Message (string): Error description
+- StatusCode (int?): HTTP status code
+- ErrorCode (string?): Machine-readable error code
+
+Common error codes:
+- "authentication_error": Invalid API key
+- "rate_limit_exceeded": Too many requests
+- "model_not_found": Model not available
+- "bad_request": Invalid request format
+- "server_error": OpenRouter server issue
+
+================================================================================
+3. STREAMING PATTERNS
+================================================================================
+
+3.1 BASIC STREAMING
+-------------------
+
+StreamAsync returns IAsyncEnumerable<StreamChunk>:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message> { Message.FromUser("Hello") }
+};
+
+await foreach (var chunk in client.StreamAsync(request))
+{
+    if (chunk.TextDelta != null)
+    {
+        Console.Write(chunk.TextDelta);  // Print streaming text
+    }
+    
+    if (chunk.Completion != null)
+    {
+        Console.WriteLine($"Finished: {chunk.Completion.FinishReason}");
+    }
+}
+---
+
+StreamChunk record properties:
+
+- IsFirstChunk (bool): True for first data chunk received
+- ElapsedTime (TimeSpan): Elapsed since first data chunk (useful for TTFT)
+- ChunkIndex (int): Sequential chunk number
+- TextDelta (string?): Text content increment
+- ToolCallDelta (ToolCall?): Tool call delta from model
+- Artifact (ArtifactEvent?): Artifact started/progress/completed events
+- ServerTool (ServerToolCall?): Server-side tool execution status
+- ClientTool (ClientToolCall?): Client-side tool call pending
+- Completion (CompletionMetadata?): Final completion info with finish reason
+- Raw (ChatCompletionStreamResponse): Raw API response
+
+CompletionMetadata:
+- FinishReason (string?): "stop", "length", "tool_calls", etc.
+- Model (string?): Model used
+- Id (string?): Response ID
+- Usage (ResponseUsage?): Token counts (usually null in stream)
+
+3.2 TIME TO FIRST TOKEN (TTFT) TRACKING
+-----------------------------------------
+
+TTFT is the time from request start to first content chunk:
+
+---
+TimeSpan? ttft = null;
+await foreach (var chunk in client.StreamAsync(request))
+{
+    if (chunk.IsFirstChunk && chunk.TextDelta != null)
+    {
+        ttft = chunk.ElapsedTime;
+        Console.WriteLine($"TTFT: {ttft.Value.TotalMilliseconds:F0}ms");
+    }
+    
+    if (chunk.TextDelta != null)
+    {
+        // Streaming text
+    }
+}
+---
+
+Key timing properties:
+- ElapsedTime: Time since streaming started
+- IsFirstChunk: Indicator of first data chunk
+- Time increases monotonically across chunks
+- Use for performance monitoring and optimization
+
+3.3 STREAMING EXTENSION METHODS
+--------------------------------
+
+StreamTextAsync (simple text collection):
+---
+var request = new ChatCompletionRequest { /* ... */ };
+var fullText = new System.Text.StringBuilder();
+
+await client.StreamTextAsync(request, 
+    onText: text => fullText.Append(text));
+
+Console.WriteLine(fullText.ToString());
+---
+
+StreamTextAsync (with callbacks):
+---
+await client.StreamTextAsync(request,
+    onText: text => Console.Write(text),
+    onFirstChunk: chunk => Console.WriteLine("Started streaming"),
+    onComplete: completion => Console.WriteLine($"Done: {completion.FinishReason}"));
+---
+
+StreamTextChunksAsync (async enumerable):
+---
+await foreach (var textChunk in client.StreamTextChunksAsync(request))
+{
+    Console.Write(textChunk);
+}
+---
+
+CollectArtifactsAsync (collect artifacts from stream):
+---
+var artifacts = await client.CollectArtifactsAsync(request,
+    onText: text => Console.Write(text));
+
+foreach (var artifact in artifacts)
+{
+    Console.WriteLine($"Artifact: {artifact.Title} ({artifact.Type})");
+    Console.WriteLine(artifact.Content);
+}
+---
+
+StreamAndAccumulateAsync (collect complete message):
+---
+var message = await client.StreamAndAccumulateAsync(request,
+    onChunk: chunk =>
+    {
+        if (chunk.TextDelta != null)
+            Console.Write(chunk.TextDelta);
+    });
+
+Console.WriteLine($"Full content: {message.Content}");
+if (message.ToolCalls != null)
+{
+    Console.WriteLine($"Tool calls: {message.ToolCalls.Length}");
+}
+---
+
+3.4 STREAMING WITH CANCELLATION
+--------------------------------
+
+All streaming methods support CancellationToken:
+
+---
+var cts = new CancellationTokenSource();
+
+var task = Task.Run(async () =>
+{
+    await foreach (var chunk in client.StreamAsync(request, cts.Token))
+    {
+        if (chunk.TextDelta != null)
+            Console.Write(chunk.TextDelta);
+    }
+});
+
+// Cancel after 5 seconds
+await Task.Delay(5000);
+cts.Cancel();
+
+try
+{
+    await task;
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("Streaming cancelled");
+}
+---
+
+================================================================================
+4. TOOL CALLING PATTERNS
+================================================================================
+
+4.1 SERVER-SIDE TOOLS (AUTO-EXECUTE)
+-------------------------------------
+
+Tools are methods that the model can call automatically. The SDK handles execution.
+
+Attribute-based registration:
+
+---
+public class CalculatorTools
+{
+    [ToolMethod("Add two numbers")]
+    public int Add(
+        [ToolParameter("First number")] int a,
+        [ToolParameter("Second number")] int b)
+    {
+        return a + b;
+    }
+
+    [ToolMethod("multiply", "Multiply two numbers")]
+    public int Multiply(
+        [ToolParameter("First number")] int a,
+        [ToolParameter("Second number")] int b)
+    {
+        return a * b;
+    }
+}
+
+// Register all methods
+var calculator = new CalculatorTools();
+client.RegisterTool(calculator, "Add", ToolMode.AutoExecute);
+client.RegisterTool(calculator, "Multiply", ToolMode.AutoExecute);
+---
+
+Lambda registration:
+
+---
+client.RegisterTool(
+    (string query) => SearchDatabase(query),
+    "Search for documents in database",
+    new { query = new { type = "string", description = "Search query" } },
+    ToolMode.AutoExecute);
+---
+
+Manual registration (if no attributes):
+
+---
+client.RegisterTool(
+    name: "get_weather",
+    implementation: args => GetWeatherData(JsonDocument.Parse(args)),
+    description: "Get current weather for a location",
+    parameters: new
+    {
+        type = "object",
+        properties = new
+        {
+            location = new { type = "string", description = "City name" },
+            unit = new { type = "string", @enum = new[] { "C", "F" } }
+        },
+        required = new[] { "location" }
+    },
+    mode: ToolMode.AutoExecute);
+---
+
+Tool registration returns the client for chaining:
+
+---
+client
+    .RegisterTool(calculator, "Add")
+    .RegisterTool(calculator, "Multiply")
+    .RegisterTool(calculator, "Divide");
+---
+
+Automatic execution during streaming:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message> { Message.FromUser("Add 5 and 3") }
+    // Tools are automatically included if registered
+};
+
+await foreach (var chunk in client.StreamAsync(request))
+{
+    if (chunk.ServerTool?.State == ToolCallState.Executing)
+    {
+        Console.WriteLine($"Executing {chunk.ServerTool.ToolName}...");
+    }
+    
+    if (chunk.ServerTool?.State == ToolCallState.Completed)
+    {
+        Console.WriteLine($"Result: {chunk.ServerTool.Result}");
+    }
+    
+    if (chunk.ServerTool?.State == ToolCallState.Error)
+    {
+        Console.WriteLine($"Error: {chunk.ServerTool.Error}");
+    }
+    
+    if (chunk.TextDelta != null)
+    {
+        Console.Write(chunk.TextDelta);
+    }
+}
+---
+
+4.2 CLIENT-SIDE TOOLS (MANUAL HANDLING)
+----------------------------------------
+
+Register tools that the client must handle:
+
+---
+client.RegisterClientTool(
+    "fetch_user",
+    "Fetch user data from database",
+    new
+    {
+        type = "object",
+        properties = new
+        {
+            userId = new { type = "string", description = "User ID" }
+        },
+        required = new[] { "userId" }
+    });
+---
+
+Client handles execution:
+
+---
+await foreach (var chunk in client.StreamAsync(request))
+{
+    if (chunk.ClientTool != null)
+    {
+        var toolName = chunk.ClientTool.ToolName;
+        var args = JsonDocument.Parse(chunk.ClientTool.Arguments);
+        
+        // Application handles the tool call
+        var userId = args.RootElement.GetProperty("userId").GetString();
+        var userData = await FetchUserFromDatabase(userId);
+        
+        // No automatic continuation - application decides next step
+        Console.WriteLine($"Client tool: {toolName} awaiting handling");
+    }
+    
+    if (chunk.TextDelta != null)
+    {
+        Console.Write(chunk.TextDelta);
+    }
+}
+---
+
+Key difference:
+- AutoExecute: SDK calls tool, passes result back to model, continues conversation
+- ClientSide: SDK yields control to application, waits for manual continuation
+- ClientSide useful for: long-running operations, external APIs, async work
+
+4.3 TOOL LOOP CONFIGURATION
+-----------------------------
+
+Control automatic tool-calling behavior:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message> { Message.FromUser("Do multiple calculations") },
+    ToolLoopConfig = new ToolLoopConfig
+    {
+        Enabled = true,              // Enable automatic tool calling
+        MaxIterations = 5,           // Max tool calls before stopping
+        TimeoutPerCall = TimeSpan.FromSeconds(30)
+    }
+};
+
+await foreach (var chunk in client.StreamAsync(request))
+{
+    // StreamAsync handles tool loops automatically
+}
+---
+
+Disable tool loops:
+
+---
+request.ToolLoopConfig = new ToolLoopConfig { Enabled = false };
+// Now tools only execute once per response
+---
+
+StreamChunk ServerToolCall structure:
+
+- ToolName (string): Name of the tool being called
+- ToolId (string): Unique identifier for this call
+- Arguments (string): JSON arguments passed to tool
+- State (ToolCallState): Executing, Completed, or Error
+- Result (string?): Result if Completed
+- Error (string?): Error message if Error state
+- ExecutionTime (TimeSpan?): How long tool took to run
+
+4.4 PROCESSING WITH EVENT CALLBACKS
+-------------------------------------
+
+Use ProcessMessageAsync for event-driven tool handling:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message> { Message.FromUser("Add 10 + 5") },
+    Stream = true
+};
+
+client.OnStreamEvent += (sender, e) =>
+{
+    switch (e.EventType)
+    {
+        case StreamEventType.StateChange:
+            Console.WriteLine($"State: {e.State}");
+            break;
+        case StreamEventType.TextContent:
+            Console.Write(e.TextDelta);
+            break;
+        case StreamEventType.ToolCall:
+            Console.WriteLine($"Calling tool: {e.ToolName}");
+            break;
+        case StreamEventType.ToolResult:
+            Console.WriteLine($"Tool result: {e.ToolResult}");
+            break;
+        case StreamEventType.Error:
+            Console.WriteLine($"Error: {e.ToolResult}");
+            break;
+    }
+};
+
+var (response, history) = await client.ProcessMessageAsync(
+    request,
+    maxToolCalls: 5);
+
+Console.WriteLine($"Final response: {response.GetContent()}");
+Console.WriteLine($"Conversation history: {history.Count} messages");
+---
+
+StreamEventArgs properties:
+- EventType: Type of event (StateChange, TextContent, ToolCall, ToolResult, Error)
+- State: Current state (Loading, Text, ToolCall, Complete)
+- ToolName: Name of tool (if tool-related event)
+- TextDelta: Text content (if TextContent event)
+- ToolCall: Full ToolCall object (if tool-related)
+- ToolResult: Result or error message (if tool result/error)
+- OriginalResponse: Raw API response
+
+StreamEventType enum:
+- StateChange: State machine changed
+- TextContent: Text received
+- ToolCall: Tool invoked
+- ToolResult: Tool completed
+- Error: Error occurred
+
+StreamState enum:
+- Loading: Waiting for response
+- Text: Receiving text
+- ToolCall: Executing tool
+- Complete: Finished
+
+================================================================================
+5. ARTIFACT SYSTEM
+================================================================================
+
+5.1 ENABLING ARTIFACT SUPPORT
+------------------------------
+
+Artifacts are self-contained code, documents, or data that the model can generate.
+
+Basic artifact support:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message> { Message.FromUser("Create a React component") }
+};
+
+request.EnableArtifactSupport();
+// Adds system message instructing model to wrap code in artifact tags
+
+var response = await client.CreateChatCompletionAsync(request);
+---
+
+With custom instructions:
+
+---
+request.EnableArtifactSupport(
+    customInstructions: "Only create artifacts for code that is over 100 lines");
+---
+
+Enable specific artifact types:
+
+---
+request.EnableCodeArtifacts("javascript", "typescript", "python");
+// Enables code artifacts with specific language constraints
+---
+
+Document artifacts:
+
+---
+request.EnableDocumentArtifacts("markdown", "html");
+---
+
+Custom artifact definitions:
+
+---
+var codeArtifact = new GenericArtifact("code", title: "script.js")
+    .WithLanguage("javascript")
+    .WithInstruction("Use modern ES6+ syntax");
+
+var dataArtifact = new GenericArtifact("data", title: "data.json")
+    .WithLanguage("json")
+    .WithOutputFormat("Valid JSON only");
+
+request.EnableArtifacts(codeArtifact, dataArtifact);
+---
+
+Using Artifacts helper:
+
+---
+var artifacts = new[]
+{
+    Artifacts.Code(language: "python"),
+    Artifacts.Document(format: "markdown"),
+    Artifacts.Data(title: "config.json", format: "json"),
+    Artifacts.Custom("diagram", title: "diagram.mermaid")
+        .WithInstruction("Use mermaid.js syntax")
+};
+
+request.EnableArtifacts(artifacts);
+---
+
+5.2 ARTIFACT DEFINITIONS
+------------------------
+
+ArtifactDefinition base class:
+
+- Type (string): "code", "document", "data", or custom type
+- PreferredTitle (string?): Suggested title
+- Language (string?): Language or format for content
+- Instruction (string?): Additional instructions for this artifact type
+- OutputFormat (string?): Expected format constraints
+- CustomAttributes (Dictionary?): Additional XML attributes
+
+GenericArtifact fluent API:
+
+---
+new GenericArtifact("whiteboard", "diagram.drawio")
+    .WithLanguage("drawio")
+    .WithInstruction("Create a detailed architecture diagram")
+    .WithOutputFormat("XML format for draw.io")
+    .WithAttribute("theme", "light")
+    .WithAttribute("exportable", "true")
+---
+
+5.3 ARTIFACT EVENTS IN STREAMS
+-------------------------------
+
+Artifact parsing happens automatically during streaming:
+
+---
+await foreach (var chunk in client.StreamAsync(request))
+{
+    if (chunk.Artifact is ArtifactStarted started)
+    {
+        Console.WriteLine($"Artifact started: {started.Title}");
+        Console.WriteLine($"Type: {started.Type}");
+        Console.WriteLine($"Language: {started.Language}");
+        Console.WriteLine($"ID: {started.ArtifactId}");
+    }
+    
+    if (chunk.Artifact is ArtifactContent content)
+    {
+        // ContentDelta contains incremental artifact content
+        artifactBuilder.Append(content.ContentDelta);
+    }
+    
+    if (chunk.Artifact is ArtifactCompleted completed)
+    {
+        Console.WriteLine($"Artifact complete: {completed.Title}");
+        Console.WriteLine($"Full content:\n{completed.Content}");
+        var artifact = new Artifact
+        {
+            Id = completed.ArtifactId,
+            Type = completed.Type,
+            Title = completed.Title,
+            Content = completed.Content,
+            Language = completed.Language
+        };
+    }
+    
+    if (chunk.TextDelta != null)
+    {
+        Console.Write(chunk.TextDelta);  // Text outside artifacts
+    }
+}
+---
+
+ArtifactEvent hierarchy:
+
+ArtifactStarted:
+- ArtifactId: Unique ID for this artifact
+- Type: Artifact type
+- Title: Display title
+- Language: Language/format if applicable
+
+ArtifactContent:
+- ArtifactId: References the artifact
+- Type: Artifact type
+- ContentDelta: Incremental content chunk
+
+ArtifactCompleted:
+- ArtifactId: ID of completed artifact
+- Type: Artifact type
+- Title: Final title
+- Content: Complete artifact content
+- Language: Language/format
+
+Artifact class:
+- Id: Unique identifier
+- Type: Artifact type
+- Title: Display title
+- Content: Full content
+- Language: Language/format
+- Metadata: Additional properties (Dictionary)
+- CreatedAt: When artifact was created
+
+5.4 EXTRACTING ARTIFACTS FROM RESPONSES
+---------------------------------------
+
+Use CollectArtifactsAsync extension:
+
+---
+var artifacts = await client.CollectArtifactsAsync(request,
+    onText: text => Console.Write(text));
+
+foreach (var artifact in artifacts)
+{
+    // Save artifact to file
+    await File.WriteAllTextAsync(
+        $"{artifact.Type}_{artifact.Title}",
+        artifact.Content);
+}
+---
+
+Manual collection:
+
+---
+var artifacts = new List<Artifact>();
+
+await foreach (var chunk in client.StreamAsync(request))
+{
+    if (chunk.Artifact is ArtifactCompleted completed)
+    {
+        artifacts.Add(new Artifact
+        {
+            Id = completed.ArtifactId,
+            Type = completed.Type,
+            Title = completed.Title,
+            Content = completed.Content,
+            Language = completed.Language
+        });
+    }
+}
+---
+
+Getting text without artifacts:
+
+---
+var textOnly = new StringBuilder();
+
+await foreach (var chunk in client.StreamAsync(request))
+{
+    if (chunk.TextDelta != null)
+    {
+        textOnly.Append(chunk.TextDelta);
+    }
+}
+
+// textOnly contains conversation text, not artifact content
+---
+
+================================================================================
+6. CONVERSATION MANAGEMENT
+================================================================================
+
+6.1 MESSAGE HISTORY EXTENSIONS
+-------------------------------
+
+Adding messages to conversation:
+
+---
+var history = new List<Message>();
+
+history.AddUserMessage("Hello, what can you do?");
+history.AddAssistantMessage("I can help with various tasks...");
+history.AddUserMessage("Can you write code?");
+---
+
+Clearing history:
+
+---
+// Keep system message, clear rest
+history.ClearHistory(keepSystemPrompt: true);
+
+// Clear everything
+history.ClearHistory(keepSystemPrompt: false);
+---
+
+Getting summary:
+
+---
+var summary = history.GetConversationSummary();
+// Returns formatted string with all messages and previews
+Console.WriteLine(summary);
+---
+
+Getting message counts:
+
+---
+var totalMessages = history.GetMessageCount();      // All messages
+var userMessages = history.GetMessageCount("user");  // Only user
+var assistantMessages = history.GetMessageCount("assistant");
+---
+
+6.2 TOKEN AND COST ESTIMATION
+------------------------------
+
+Token estimation (rough approximation):
+
+---
+var estimatedTokens = history.EstimateTokenCount();
+// Uses ~4 characters per token approximation
+// Note: This is an estimate, actual tokens may vary
+---
+
+Cost estimation:
+
+---
+// Prices in USD per million tokens
+decimal inputPrice = 0.015m;      // $0.015 per 1M input tokens
+decimal outputPrice = 0.06m;      // $0.06 per 1M output tokens
+int estimatedOutput = 500;        // Estimated output tokens
+
+var estimatedCost = history.EstimateCost(inputPrice, outputPrice, estimatedOutput);
+Console.WriteLine($"Estimated cost: ${estimatedCost:F6}");
+---
+
+Use after response:
+
+---
+var response = await client.CreateChatCompletionAsync(request);
+var fullText = response.GetContent() ?? "";
+
+// Add response to history
+history.AddAssistantMessage(fullText);
+
+// Calculate with actual output tokens
+var actualOutputTokens = response.Usage?.CompletionTokens ?? 0;
+var actualCost = history.EstimateCost(0.015m, 0.06m, actualOutputTokens);
+Console.WriteLine($"Actual cost: ${actualCost:F6}");
+---
+
+6.3 MULTI-TURN CONVERSATIONS
+-----------------------------
+
+Complete conversation flow:
+
+---
+var client = new OpenRouterClient(apiKey);
+var history = new List<Message>
+{
+    Message.FromSystem("You are a helpful assistant.")
+};
+
+history.AddUserMessage("What is machine learning?");
+
+var response1 = await client.CreateChatCompletionAsync(new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = history
+});
+
+history.AddAssistantMessage(response1.GetContent() ?? "");
+
+history.AddUserMessage("Can you give me an example?");
+
+var response2 = await client.CreateChatCompletionAsync(new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = history
+});
+
+history.AddAssistantMessage(response2.GetContent() ?? "");
+
+// History now contains entire conversation
+Console.WriteLine(history.GetConversationSummary());
+---
+
+With streaming:
+
+---
+while (true)
+{
+    var userInput = Console.ReadLine();
+    if (string.IsNullOrEmpty(userInput)) break;
+    
+    history.AddUserMessage(userInput);
+    
+    var responseText = new StringBuilder();
+    var request = new ChatCompletionRequest
+    {
+        Model = "openai/gpt-4o",
+        Messages = history
+    };
+    
+    await foreach (var chunk in client.StreamAsync(request))
+    {
+        if (chunk.TextDelta != null)
+        {
+            responseText.Append(chunk.TextDelta);
+            Console.Write(chunk.TextDelta);
+        }
+    }
+    
+    history.AddAssistantMessage(responseText.ToString());
+    Console.WriteLine("\n");
+}
+---
+
+================================================================================
+7. ADVANCED FEATURES
+================================================================================
+
+7.1 MULTIMODAL (TEXT + IMAGES)
+-------------------------------
+
+Including images in user messages:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message>
+    {
+        Message.FromUser(new List<ContentPart>
+        {
+            new TextContent("What's shown in this image?"),
+            new ImageContent("https://example.com/image.jpg")
+        })
+    }
+};
+
+var response = await client.CreateChatCompletionAsync(request);
+---
+
+Image detail control:
+
+---
+new ImageContent("https://example.com/image.jpg", detail: "high")
+// detail: "auto" (default), "low", "high"
+---
+
+Base64 encoded images:
+
+---
+var base64Image = Convert.ToBase64String(File.ReadAllBytes("image.jpg"));
+new ImageContent($"data:image/jpeg;base64,{base64Image}")
+---
+
+Multiple images:
+
+---
+Message.FromUser(new List<ContentPart>
+{
+    new TextContent("Compare these images:"),
+    new ImageContent("https://example.com/image1.jpg"),
+    new ImageContent("https://example.com/image2.jpg"),
+    new TextContent("What's the key difference?")
+})
+---
+
+Important notes:
+- Not all models support image inputs - check model capabilities
+- Image URLs must be publicly accessible (no auth required)
+- Detail level affects token usage (high uses more tokens)
+- Some models have image size limitations
+
+7.2 JSON MODE
+--------------
+
+Ensure JSON output:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message>
+    {
+        Message.FromSystem("Return valid JSON only."),
+        Message.FromUser("Generate a user profile object")
+    },
+    ResponseFormat = new ResponseFormat { Type = "json_object" }
+};
+
+var response = await client.CreateChatCompletionAsync(request);
+var jsonResponse = response.GetContent();  // Guaranteed to be valid JSON
+---
+
+Best practices:
+- Always include instructions in system message about JSON structure
+- Specify fields and types expected
+- Model may add extra fields but structure will be JSON
+- Not all models support JSON mode
+
+7.3 SYSTEM PROMPTS
+-------------------
+
+Basic system prompt:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message>
+    {
+        Message.FromSystem("You are a Python programming expert. Provide concise, well-documented code examples."),
+        Message.FromUser("How do I read a file?")
+    }
+};
+---
+
+Dynamic system prompts:
+
+---
+string GetSystemPrompt(string role)
+{
+    return role switch
+    {
+        "python" => "You are an expert Python programmer. Provide Pythonic code.",
+        "javascript" => "You are an expert JavaScript developer. Use modern ES6+ syntax.",
+        "teaching" => "You are an excellent teacher. Explain concepts clearly.",
+        _ => "You are a helpful assistant."
+    };
+}
+
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message>
+    {
+        Message.FromSystem(GetSystemPrompt("python")),
+        Message.FromUser("Write a function to sort a list")
+    }
+};
+---
+
+System prompt impact:
+- Goes in Messages list as first message with role="system"
+- Influences entire conversation
+- More specific/detailed prompts give better results
+- Can be updated in multi-turn conversations (not recommended)
+
+7.4 PROVIDER AND MODEL SELECTION
+----------------------------------
+
+Specific provider:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Messages = new List<Message> { Message.FromUser("Hello") }
+};
+---
+
+Model fallback/load balancing:
+
+---
+var request = new ChatCompletionRequest
+{
+    Models = new List<string>
+    {
+        "openai/gpt-4o",
+        "anthropic/claude-3.5-sonnet",
+        "meta-llama/llama-3.1-70b-instruct"
+    },
+    Messages = new List<Message> { Message.FromUser("Hello") }
+};
+// OpenRouter tries models in order, uses first available
+---
+
+Provider routing:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "gpt-4o",  // Model name without provider
+    Provider = new { name = "openai" },
+    Messages = new List<Message> { Message.FromUser("Hello") }
+};
+---
+
+Route preferences:
+
+---
+var request = new ChatCompletionRequest
+{
+    Model = "openai/gpt-4o",
+    Route = "fallback",  // or other routing strategy
+    Messages = new List<Message> { Message.FromUser("Hello") }
+};
+---
+
+Available models:
+
+---
+var models = await client.GetModelsAsync();
+
+var gptModels = models
+    .Where(m => m.Id.StartsWith("openai/"))
+    .OrderBy(m => m.Id)
+    .ToList();
+
+foreach (var model in gptModels)
+{
+    Console.WriteLine($"{model.Id}: {model.Name}");
+    Console.WriteLine($"  Context: {model.ContextLength} tokens");
+}
+---
+
+7.5 RATE LIMITING AND RETRIES
+------------------------------
+
+Handle rate limits:
+
+---
+var maxRetries = 3;
+var retryDelay = TimeSpan.FromSeconds(1);
+
+for (int attempt = 0; attempt < maxRetries; attempt++)
+{
+    try
+    {
+        var response = await client.CreateChatCompletionAsync(request);
+        return response;
+    }
+    catch (OpenRouterRateLimitException ex)
+    {
+        if (attempt < maxRetries - 1)
+        {
+            var waitTime = ex.RetryAfterSeconds ?? (int)retryDelay.TotalSeconds;
+            Console.WriteLine($"Rate limited. Waiting {waitTime}s...");
+            await Task.Delay(TimeSpan.FromSeconds(waitTime));
+            retryDelay = retryDelay.Add(TimeSpan.FromSeconds(2));  // Exponential backoff
+        }
+        else
+        {
+            throw;
+        }
+    }
+}
+---
+
+Exponential backoff:
+
+---
+async Task<ChatCompletionResponse> SendWithRetryAsync(
+    ChatCompletionRequest request,
+    int maxAttempts = 5)
+{
+    var delay = TimeSpan.FromMilliseconds(100);
+    
+    for (int attempt = 0; attempt < maxAttempts; attempt++)
+    {
+        try
+        {
+            return await client.CreateChatCompletionAsync(request);
+        }
+        catch (OpenRouterRateLimitException ex) when (attempt < maxAttempts - 1)
+        {
+            var waitTime = ex.RetryAfterSeconds ?? (int)delay.TotalSeconds;
+            await Task.Delay(TimeSpan.FromSeconds(waitTime));
+            delay = delay.Add(delay);  // Double wait time
+        }
+    }
+    
+    throw new InvalidOperationException("Max retries exceeded");
+}
+---
+
+Account limits:
+
+---
+var limits = await client.GetLimitsAsync();
+Console.WriteLine($"Remaining requests: {limits.RemainingRequests}");
+Console.WriteLine($"Rate limit: {limits.RateLimitPerMinute} requests/min");
+---
+
+================================================================================
+8. COMMON PATTERNS FROM SAMPLES
+================================================================================
+
+8.1 INTERACTIVE MODEL SELECTION
+--------------------------------
+
+From BasicCliSample:
+
+---
+var models = await client.GetModelsAsync();
+
+var popularModels = new[] { "openai/gpt-4o", "anthropic/claude-3.5-sonnet" };
+
+var modelChoices = models
+    .Select(m => m.Id)
+    .OrderBy(m =>
+    {
+        var popularIndex = Array.IndexOf(popularModels, m);
+        return popularIndex != -1 ? popularIndex : 100;
+    })
+    .ToList();
+
+// Use with Spectre.Console for interactive selection:
+var selectedModel = AnsiConsole.Prompt(
+    new SelectionPrompt<string>()
+        .Title("Select a model:")
+        .PageSize(10)
+        .EnableSearch()
+        .AddChoices(modelChoices));
+---
+
+8.2 STREAMING WITH LIVE UPDATES
+---------------------------------
+
+Using Spectre.Console for progress:
+
+---
+var responseText = new StringBuilder();
+TimeSpan? ttft = null;
+
+await AnsiConsole.Live(CreateDisplay(responseText.ToString(), null))
+    .StartAsync(async ctx =>
+    {
+        await foreach (var chunk in client.StreamAsync(request))
+        {
+            if (chunk.IsFirstChunk && chunk.TextDelta != null)
+            {
+                ttft = chunk.ElapsedTime;
+            }
+            
+            if (chunk.TextDelta != null)
+            {
+                responseText.Append(chunk.TextDelta);
+                ctx.UpdateTarget(CreateDisplay(responseText.ToString(), ttft));
+            }
+        }
+    });
+---
+
+Display helper function:
+
+---
+static Table CreateDisplay(string content, TimeSpan? ttft)
+{
+    var table = new Table().Border(TableBorder.None);
+    table.AddColumn("Response");
+    
+    if (ttft.HasValue)
+    {
+        table.AddRow($"[green]● Streaming[/] ([dim]{ttft.Value.TotalMilliseconds:F0}ms TTFT[/])");
+    }
+    else
+    {
+        table.AddRow("[yellow]● Waiting...[/]");
+    }
+    
+    table.AddRow(content);
+    return table;
+}
+---
+
+8.3 BATCH PROCESSING
+---------------------
+
+Processing multiple requests:
+
+---
+var prompts = new[]
+{
+    "What is AI?",
+    "Explain machine learning",
+    "What is deep learning?"
+};
+
+var results = new List<string>();
+
+foreach (var prompt in prompts)
+{
+    var request = new ChatCompletionRequest
+    {
+        Model = "openai/gpt-4o",
+        Messages = new List<Message> { Message.FromUser(prompt) }
+    };
+    
+    var response = await client.CreateChatCompletionAsync(request);
+    results.Add(response.GetContent() ?? "");
+}
+---
+
+Parallel batch processing:
+
+---
+var batchTasks = prompts.Select(async prompt =>
+{
+    var request = new ChatCompletionRequest
+    {
+        Model = "openai/gpt-4o",
+        Messages = new List<Message> { Message.FromUser(prompt) }
+    };
+    
+    var response = await client.CreateChatCompletionAsync(request);
+    return (prompt, response: response.GetContent() ?? "");
+});
+
+var results = await Task.WhenAll(batchTasks);
+
+foreach (var (prompt, response) in results)
+{
+    Console.WriteLine($"Q: {prompt}");
+    Console.WriteLine($"A: {response}\n");
+}
+---
+
+================================================================================
+DIAGNOSTIC AND TESTING PATTERNS
+================================================================================
+
+From DiagnosticSample - comprehensive testing:
+
+Streaming handler pattern:
+
+---
+public class StreamingHandler
+{
+    public async Task StreamResponseAsync(
+        OpenRouterClient client,
+        ChatCompletionRequest request,
+        Action<(int chunkCount, TimeSpan ttft)> displayCallback)
+    {
+        int chunkCount = 0;
+        TimeSpan? ttft = null;
+        var artifacts = new List<Artifact>();
+        
+        try
+        {
+            await foreach (var chunk in client.StreamAsync(request))
+            {
+                chunkCount++;
+                
+                if (chunk.IsFirstChunk && chunk.TextDelta != null)
+                {
+                    ttft = chunk.ElapsedTime;
+                }
+                
+                // Handle artifacts
+                if (chunk.Artifact is ArtifactCompleted completed)
+                {
+                    artifacts.Add(new Artifact
+                    {
+                        Id = completed.ArtifactId,
+                        Type = completed.Type,
+                        Title = completed.Title,
+                        Content = completed.Content
+                    });
+                }
+                
+                displayCallback((chunkCount, ttft ?? TimeSpan.Zero));
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error
+        }
+    }
+}
+---
+
+================================================================================
+IMPORTANT NOTES AND BEST PRACTICES
+================================================================================
+
+1. API Key Security:
+   - Never hardcode API keys
+   - Use environment variables: Environment.GetEnvironmentVariable("OPENROUTER_API_KEY")
+   - Use .NET user secrets in development
+   - Rotate keys regularly
+
+2. Streaming vs Non-Streaming:
+   - Use streaming for long responses or real-time feedback
+   - Use non-streaming for simple queries or when you need full response first
+   - Streaming is more responsive and better for TTFT tracking
+   - Both return same content, streaming provides it incrementally
+
+3. Tool Calling:
+   - Always register tools before streaming with tools
+   - Tools are auto-included in requests if registered with client
+   - Attribute-based registration preferred over manual
+   - Handle errors gracefully - model may call non-existent tools
+   - Set maxToolCalls to prevent infinite loops
+
+4. Token Management:
+   - Estimate tokens before sending large requests
+   - Clear conversation history periodically in long sessions
+   - Monitor token usage from responses (Usage field)
+   - Different models have different tokenization
+
+5. Error Handling:
+   - Catch specific exception types: OpenRouterRateLimitException, OpenRouterAuthException
+   - Implement exponential backoff for retries
+   - Check RetryAfterSeconds for rate limits
+   - Don't retry on authentication errors immediately
+
+6. Performance:
+   - Reuse client instance for multiple requests
+   - Use connection pooling (HttpClient manages this)
+   - Cache model list if listing models frequently
+   - Monitor TTFT for performance analysis
+
+7. Conversation Management:
+   - Keep system message consistent across turns
+   - Don't include the entire history in every request if it grows large
+   - Use message roles correctly: system, user, assistant, tool
+   - Clear history when changing topics
+
+8. Model Selection:
+   - Check model availability with GetModelsAsync()
+   - Use fallback model lists for reliability
+   - Consider context length for your use case
+   - Some models are region/availability specific
+
+9. Artifacts:
+   - Enable artifact support for code generation tasks
+   - Artifacts are parsed automatically during streaming
+   - Collect complete artifacts in ArtifactCompleted events
+   - Text outside artifacts is normal conversation text
+
+10. Logging and Debugging:
+    - Use OnLogMessage callback in OpenRouterClientOptions
+    - Log StreamChunk data for debugging streaming
+    - Save requests/responses to disk for reproducibility
+    - Use diagnostic sample patterns for testing
+
+================================================================================
+END OF DOCUMENTATION
+================================================================================
+
+For latest information, see:
+- GitHub: https://github.com/WilliamAvHolmberg/OpenRouter.NET
+- OpenRouter API: https://openrouter.ai
+- Documentation: Check README.md in project root
+
+Last Updated: 2025
