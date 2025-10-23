@@ -45,7 +45,7 @@ var request = new ChatCompletionRequest
 };
 
 var response = await client.CreateChatCompletionAsync(request);
-Console.WriteLine(response.Choices[0].Message.Content);
+Console.WriteLine(response.Choices[0].Message.Content?.ToString() ?? "No response");
 ```
 
 ### Streaming
@@ -128,7 +128,7 @@ var request = new ChatCompletionRequest
 };
 
 var response = await client.CreateChatCompletionAsync(request);
-var assistantMessage = response.Choices[0].Message.Content;
+var assistantMessage = response.Choices[0].Message.Content?.ToString() ?? "";
 
 // Add assistant response to history
 conversationHistory.AddAssistantMessage(assistantMessage);
@@ -138,7 +138,7 @@ conversationHistory.AddUserMessage("What's the population?");
 request.Messages = conversationHistory;
 
 response = await client.CreateChatCompletionAsync(request);
-Console.WriteLine(response.Choices[0].Message.Content);
+Console.WriteLine(response.Choices[0].Message.Content?.ToString() ?? "No response");
 ```
 
 ## Samples
