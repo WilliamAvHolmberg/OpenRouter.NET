@@ -1,0 +1,43 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+
+    <!-- Disable default compile items to use custom source directory -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultItems>false</EnableDefaultItems>
+
+    <!-- Build output directories -->
+    <BaseIntermediateOutputPath>obj\</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin\</BaseOutputPath>
+
+    <!-- Disable XML documentation warnings -->
+    <NoWarn>$(NoWarn);CS1591;CS8603</NoWarn>
+
+    <!-- NuGet Package Metadata -->
+    <PackageId>OpenRouter.NET</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>William Holmberg</Authors>
+    <Company>William Holmberg</Company>
+    <Description>A .NET SDK for OpenRouter API - Unified interface for LLM APIs</Description>
+    <PackageTags>openrouter;llm;ai;sdk;api;gpt;claude;anthropic</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/williamholmberg/OpenRouter.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/williamholmberg/OpenRouter.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="src/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>
