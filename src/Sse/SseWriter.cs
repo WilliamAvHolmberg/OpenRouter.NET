@@ -43,8 +43,8 @@ public class SseWriter
     public static void SetupSseHeaders(Microsoft.AspNetCore.Http.HttpResponse response)
     {
         response.ContentType = "text/event-stream";
-        response.Headers.Append("Cache-Control", "no-cache");
-        response.Headers.Append("Connection", "keep-alive");
-        response.Headers.Append("X-Accel-Buffering", "no");
+        response.Headers["Cache-Control"] = "no-cache";
+        response.Headers["Connection"] = "keep-alive";
+        response.Headers["X-Accel-Buffering"] = "no";
     }
 }
