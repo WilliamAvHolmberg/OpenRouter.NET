@@ -1,21 +1,22 @@
 using Microsoft.AspNetCore.Http;
 using OpenRouter.NET.Models;
+using System.Text;
 using System.Text.Json;
 
 namespace OpenRouter.NET.Sse;
 
 public static class SseStreamingExtensions
 {
-    public static async Task StreamAsSseAsync(
+    public static async Task<List<Message>> StreamAsSseAsync(
         this OpenRouterClient client,
         ChatCompletionRequest request,
         HttpResponse response,
         CancellationToken cancellationToken = default)
     {
-        await StreamAsSseAsync(client, request, response, null, cancellationToken);
+        return await StreamAsSseAsync(client, request, response, null, cancellationToken);
     }
 
-    public static async Task StreamAsSseAsync(
+    public static async Task<List<Message>> StreamAsSseAsync(
         this OpenRouterClient client,
         ChatCompletionRequest request,
         HttpResponse response,
@@ -28,12 +29,110 @@ public static class SseStreamingExtensions
         var completionSent = false;
         var lastChunkIndex = 0;
 
+        // Message accumulation
+        var messages = new List<Message>();
+        var contentBuilder = new StringBuilder();
+        var toolCallsAccumulator = new Dictionary<int, ToolCall>();
+        var hasContent = false;
+        var currentMessageAdded = false;
+
         try
         {
             await foreach (var chunk in client.StreamAsync(request, cancellationToken))
             {
                 var events = SseChunkMapper.MapChunk(chunk);
                 lastChunkIndex = chunk.ChunkIndex;
+
+                // Accumulate text content
+                if (chunk.TextDelta != null)
+                {
+                    contentBuilder.Append(chunk.TextDelta);
+                    hasContent = true;
+
+                    // If we're seeing text after tools were processed, reset for new assistant message
+                    if (currentMessageAdded)
+                    {
+                        contentBuilder.Clear();
+                        contentBuilder.Append(chunk.TextDelta);
+                        toolCallsAccumulator.Clear();
+                        currentMessageAdded = false;
+                    }
+                }
+
+                // Accumulate tool call deltas
+                if (chunk.ToolCallDelta != null)
+                {
+                    var toolCallDelta = chunk.ToolCallDelta;
+                    if (!toolCallsAccumulator.ContainsKey(toolCallDelta.Index))
+                    {
+                        toolCallsAccumulator[toolCallDelta.Index] = new ToolCall
+                        {
+                            Index = toolCallDelta.Index,
+                            Id = toolCallDelta.Id ?? "",
+                            Type = toolCallDelta.Type ?? "function",
+                            Function = new FunctionCall
+                            {
+                                Name = toolCallDelta.Function?.Name ?? "",
+                                Arguments = toolCallDelta.Function?.Arguments ?? ""
+                            }
+                        };
+                    }
+                    else
+                    {
+                        var existing = toolCallsAccumulator[toolCallDelta.Index];
+                        if (toolCallDelta.Id != null)
+                        {
+                            existing.Id = toolCallDelta.Id;
+                        }
+                        if (toolCallDelta.Function?.Name != null)
+                        {
+                            existing.Function!.Name = toolCallDelta.Function.Name;
+                        }
+                        if (toolCallDelta.Function?.Arguments != null)
+                        {
+                            existing.Function!.Arguments += toolCallDelta.Function.Arguments;
+                        }
+                    }
+                    hasContent = true;
+                }
+
+                // When we see a ServerTool chunk, finalize the current assistant message (if not already done)
+                if (chunk.ServerTool != null && hasContent && !currentMessageAdded)
+                {
+                    var assistantMessage = new Message
+                    {
+                        Role = "assistant",
+                        Content = contentBuilder.ToString()
+                    };
+
+                    if (toolCallsAccumulator.Count > 0)
+                    {
+                        assistantMessage.ToolCalls = toolCallsAccumulator.Values.ToArray();
+                    }
+
+                    messages.Add(assistantMessage);
+                    currentMessageAdded = true;
+                }
+
+                // Add tool result messages
+                if (chunk.ServerTool?.State == ToolCallState.Completed)
+                {
+                    messages.Add(new Message
+                    {
+                        Role = "tool",
+                        ToolCallId = chunk.ServerTool.ToolId,
+                        Content = chunk.ServerTool.Result ?? ""
+                    });
+                }
+                else if (chunk.ServerTool?.State == ToolCallState.Error)
+                {
+                    messages.Add(new Message
+                    {
+                        Role = "tool",
+                        ToolCallId = chunk.ServerTool.ToolId,
+                        Content = chunk.ServerTool.Error ?? "Unknown error"
+                    });
+                }
 
                 foreach (var sseEvent in events)
                 {
@@ -44,6 +143,23 @@ public static class SseStreamingExtensions
                         completionSent = true;
                     }
                 }
+            }
+
+            // Add any remaining assistant message (final response without tool calls)
+            if (hasContent && !currentMessageAdded)
+            {
+                var assistantMessage = new Message
+                {
+                    Role = "assistant",
+                    Content = contentBuilder.ToString()
+                };
+
+                if (toolCallsAccumulator.Count > 0)
+                {
+                    assistantMessage.ToolCalls = toolCallsAccumulator.Values.ToArray();
+                }
+
+                messages.Add(assistantMessage);
             }
 
             // Ensure a completion event is always sent
@@ -73,6 +189,8 @@ public static class SseStreamingExtensions
 
             await writer.WriteEventAsync(errorEvent, cancellationToken);
         }
+
+        return messages;
     }
 
     public static async IAsyncEnumerable<SseEvent> StreamAsSseEventsAsync(
