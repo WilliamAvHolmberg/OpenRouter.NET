@@ -16,7 +16,48 @@ When creating artifacts, wrap them in tags like this:
 your content here
 </artifact>
 
-Use artifacts when you're delivering complete, self-contained code or documents that the user can save and use directly. For explanations or conversation, respond normally without artifacts.";
+CRITICAL ARTIFACT RULES:
+
+1. WHEN TO USE ARTIFACTS:
+   - Complete, standalone files the user can save directly (e.g., Component.tsx, script.py, config.json)
+   - Self-contained documents or code that represent a single deliverable
+
+2. WHEN NOT TO USE ARTIFACTS:
+   - Explanations of how to use code
+   - Usage examples or import statements
+   - Conversational code snippets
+   - Multiple related files in one artifact
+   - ANY explanatory text or questions to the user
+
+3. STRUCTURAL REQUIREMENTS:
+   - Every <artifact> tag MUST have a matching </artifact> tag
+   - NEVER write </artifact> as part of conversational text
+   - The closing tag is a structural element, not content
+   - Each artifact should contain ONE complete file only
+
+4. CONTENT BOUNDARIES:
+   - Artifact content ENDS at </artifact> - nothing after the tag should be inside
+   - If you want to explain usage, write it OUTSIDE the artifact tags as normal text
+   - Example of CORRECT usage:
+     <artifact type=""code"" title=""Component.tsx"" language=""typescript"">
+     export default function Component() { return <div>Hello</div>; }
+     </artifact>
+
+     To use this component, import it like: import Component from './Component';
+
+   - Example of INCORRECT usage (DO NOT DO THIS):
+     <artifact type=""code"" title=""App.tsx"" language=""typescript"">
+     import Component from './Component';
+     export default App;
+     </artifact>
+
+     Would you like me to modify this? ← THIS TEXT SHOULD NOT BE IN THE ARTIFACT
+
+5. GUARANTEE CLOSURE:
+   - Before ending your response, ensure all opened artifacts are closed
+   - Never leave an artifact tag unclosed
+
+Use artifacts ONLY for complete, self-contained deliverables. For all explanations, usage examples, or conversation, respond normally without artifacts.";
 
         if (!string.IsNullOrEmpty(customInstructions))
         {
@@ -24,7 +65,7 @@ Use artifacts when you're delivering complete, self-contained code or documents 
         }
 
         PrependOrAppendToSystemMessage(request, instructions);
-        
+
         return request;
     }
     
@@ -101,12 +142,35 @@ CRITICAL: You MUST use the exact XML format below. Always include BOTH opening a
             baseInstructions += "\n";
         }
 
-        baseInstructions += @"IMPORTANT RULES:
-1. ALWAYS close your artifact tags with </artifact>
-2. Include proper title attribute with file extension for code
-3. Use artifacts for complete, self-contained deliverables
-4. Use normal text for explanations and conversation";
-        
+        baseInstructions += @"CRITICAL ARTIFACT RULES:
+
+1. STRUCTURAL REQUIREMENTS:
+   - Every <artifact> tag MUST have a matching </artifact> tag
+   - NEVER write </artifact> as part of conversational text or content
+   - The closing tag is a structural element, not content
+   - Each artifact contains ONE complete file only
+
+2. WHEN TO USE ARTIFACTS:
+   - Complete, standalone files the user can save directly
+   - Self-contained documents or code that represent a single deliverable
+
+3. WHEN NOT TO USE ARTIFACTS:
+   - Explanations of how to use code (explain OUTSIDE the artifact)
+   - Usage examples or import statements (show OUTSIDE the artifact)
+   - Conversational text or questions to the user
+   - Multiple related files in one artifact
+
+4. CONTENT BOUNDARIES:
+   - Artifact content ENDS at </artifact> - nothing after should be inside
+   - If explaining usage, write it as normal text OUTSIDE the artifact tags
+   - Never include conversational text inside artifact content
+
+5. GUARANTEE CLOSURE:
+   - Before ending your response, ensure all opened artifacts are closed
+   - Never leave an artifact tag unclosed
+
+Include proper title attribute with file extension for code. Use artifacts ONLY for complete, self-contained deliverables.";
+
         PrependOrAppendToSystemMessage(request, baseInstructions);
         
         return request;

@@ -255,6 +255,10 @@ dotnet run
 
 Full documentation coming soon.
 
+## Known Issues
+
+**Next.js SSE Streaming**: Next.js compression buffers responses before sending, causing SSE streams to arrive as one big chunk. Set `compress: false` in `next.config.js` to fix.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

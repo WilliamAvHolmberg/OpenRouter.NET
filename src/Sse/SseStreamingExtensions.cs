@@ -198,14 +198,35 @@ public static class SseStreamingExtensions
         ChatCompletionRequest request,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        var completionSent = false;
+        var lastChunkIndex = 0;
+
         await foreach (var chunk in client.StreamAsync(request, cancellationToken))
         {
             var events = SseChunkMapper.MapChunk(chunk);
-            
+            lastChunkIndex = chunk.ChunkIndex;
+
             foreach (var sseEvent in events)
             {
+                if (sseEvent is CompletionEvent)
+                {
+                    completionSent = true;
+                }
+
                 yield return sseEvent;
             }
+        }
+
+        // Ensure a completion event is always sent
+        if (!completionSent)
+        {
+            yield return new CompletionEvent
+            {
+                Type = SseEventType.Completion,
+                ChunkIndex = lastChunkIndex + 1,
+                ElapsedMs = 0,
+                FinishReason = "stop"
+            };
         }
     }
 }
