@@ -143,6 +143,17 @@ public class OpenRouterClient
             request.Tools = _tools;
         }
 
+        // Apply default reasoning: lowest effort and excluded, if not specified
+        if (request.Reasoning == null)
+        {
+            request.Reasoning = new Models.ReasoningConfig
+            {
+                Effort = "low",
+                Exclude = true,
+                Enabled = true
+            };
+        }
+
         var requestContent = JsonSerializer.Serialize(request, _jsonOptions);
 
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/chat/completions")
@@ -187,6 +198,17 @@ public class OpenRouterClient
                 yield return chunk;
             }
             yield break;
+        }
+
+        // Apply default reasoning for streaming as well
+        if (request.Reasoning == null)
+        {
+            request.Reasoning = new Models.ReasoningConfig
+            {
+                Effort = "low",
+                Exclude = true,
+                Enabled = true
+            };
         }
 
         var toolCallsCount = 0;
