@@ -23,19 +23,41 @@ public static class SseStreamingExtensions
         CancellationToken cancellationToken = default)
     {
         SseWriter.SetupSseHeaders(response);
-        
+
         var writer = new SseWriter(response.Body, jsonOptions);
+        var completionSent = false;
+        var lastChunkIndex = 0;
 
         try
         {
             await foreach (var chunk in client.StreamAsync(request, cancellationToken))
             {
                 var events = SseChunkMapper.MapChunk(chunk);
-                
+                lastChunkIndex = chunk.ChunkIndex;
+
                 foreach (var sseEvent in events)
                 {
                     await writer.WriteEventAsync(sseEvent, cancellationToken);
+
+                    if (sseEvent is CompletionEvent)
+                    {
+                        completionSent = true;
+                    }
                 }
+            }
+
+            // Ensure a completion event is always sent
+            if (!completionSent)
+            {
+                var completionEvent = new CompletionEvent
+                {
+                    Type = SseEventType.Completion,
+                    ChunkIndex = lastChunkIndex + 1,
+                    ElapsedMs = 0,
+                    FinishReason = "stop"
+                };
+
+                await writer.WriteEventAsync(completionEvent, cancellationToken);
             }
         }
         catch (Exception ex)
@@ -48,7 +70,7 @@ public static class SseStreamingExtensions
                 Message = ex.Message,
                 Details = ex.ToString()
             };
-            
+
             await writer.WriteEventAsync(errorEvent, cancellationToken);
         }
     }
