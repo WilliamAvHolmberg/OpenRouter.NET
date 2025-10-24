@@ -14,6 +14,7 @@ public class ArtifactParser
     private string? _currentLanguage;
     private readonly StringBuilder _artifactContent = new();
     private int _artifactCounter = 0;
+    private const string ClosingTag = "</artifact>";
     
     public ParseResult Parse(string input)
     {
@@ -121,21 +122,32 @@ public class ArtifactParser
             
             if (_state == ParserState.InArtifact)
             {
-                var endIdx = bufferText.IndexOf("</artifact>");
+                var endIdx = bufferText.IndexOf(ClosingTag);
                 
                 if (endIdx == -1)
                 {
-                    // Still inside artifact, accumulate content
-                    if (bufferText.Length > 0)
+                    // Still inside artifact; we must retain a suffix to detect a closing tag
+                    // that might be split across chunks. Keep ClosingTag.Length - 1 characters.
+                    var keepLen = ClosingTag.Length - 1;
+                    if (bufferText.Length <= keepLen)
                     {
-                        _artifactContent.Append(bufferText);
-                        result.ArtifactContent = new ArtifactContent(
-                            _currentArtifactId!,
-                            _currentType!,
-                            bufferText
-                        );
+                        // Not enough content to safely emit; keep entire buffer
                         _buffer.Clear();
+                        _buffer.Append(bufferText);
+                        break;
                     }
+
+                    var emitLen = bufferText.Length - keepLen;
+                    var emitText = bufferText.Substring(0, emitLen);
+                    _artifactContent.Append(emitText);
+                    result.ArtifactContent = new ArtifactContent(
+                        _currentArtifactId!,
+                        _currentType!,
+                        emitText
+                    );
+
+                    _buffer.Clear();
+                    _buffer.Append(bufferText.Substring(emitLen));
                     break;
                 }
                 
@@ -160,7 +172,7 @@ public class ArtifactParser
                     _currentLanguage
                 );
                 
-                bufferText = bufferText.Substring(endIdx + "</artifact>".Length);
+                bufferText = bufferText.Substring(endIdx + ClosingTag.Length);
                 _buffer.Clear();
                 _buffer.Append(bufferText);
                 
