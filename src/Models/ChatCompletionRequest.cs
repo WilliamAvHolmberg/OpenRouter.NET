@@ -78,6 +78,9 @@ public class ChatCompletionRequest
 
     [JsonPropertyName("provider")]
     public object? Provider { get; set; }
+
+    [JsonPropertyName("reasoning")]
+    public ReasoningConfig? Reasoning { get; set; }
     
     [JsonIgnore]
     public ToolLoopConfig? ToolLoopConfig { get; set; }
@@ -96,5 +99,20 @@ public class Prediction
 
     [JsonPropertyName("content")]
     public string? Content { get; set; }
+}
+
+public class ReasoningConfig
+{
+    [JsonPropertyName("effort")]
+    public string? Effort { get; set; }
+
+    [JsonPropertyName("max_tokens")]
+    public int? MaxTokens { get; set; }
+
+    [JsonPropertyName("exclude")]
+    public bool? Exclude { get; set; }
+
+    [JsonPropertyName("enabled")]
+    public bool? Enabled { get; set; }
 }
 

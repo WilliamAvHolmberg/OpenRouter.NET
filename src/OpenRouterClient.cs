@@ -143,6 +143,17 @@ public class OpenRouterClient
             request.Tools = _tools;
         }
 
+        // Apply default reasoning: lowest effort and excluded, if not specified
+        if (request.Reasoning == null)
+        {
+            request.Reasoning = new Models.ReasoningConfig
+            {
+                Effort = "low",
+                Exclude = true,
+                Enabled = true
+            };
+        }
+
         var requestContent = JsonSerializer.Serialize(request, _jsonOptions);
 
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_baseUrl}/chat/completions")
@@ -187,6 +198,17 @@ public class OpenRouterClient
                 yield return chunk;
             }
             yield break;
+        }
+
+        // Apply default reasoning for streaming as well
+        if (request.Reasoning == null)
+        {
+            request.Reasoning = new Models.ReasoningConfig
+            {
+                Effort = "low",
+                Exclude = true,
+                Enabled = true
+            };
         }
 
         var toolCallsCount = 0;
@@ -473,6 +495,7 @@ public class OpenRouterClient
         System.Diagnostics.Stopwatch? stopwatch = null;
         var chunkIndex = 0;
         var isFirstChunk = true;
+        var completionSent = false;
         var artifactParser = new Parsing.ArtifactParser();
 
         string? line;
@@ -576,6 +599,7 @@ public class OpenRouterClient
                                     Id = rawChunk.Id
                                 }
                             };
+                            completionSent = true;
                         }
                         
                         chunksToYield.Add(textChunk);
@@ -620,6 +644,7 @@ public class OpenRouterClient
                             },
                             Raw = rawChunk
                         });
+                        completionSent = true;
                     }
                     else if (delta?.ToolCalls == null || delta.ToolCalls.Length == 0)
                     {
@@ -650,6 +675,39 @@ public class OpenRouterClient
             {
                 yield return chunkToYield;
             }
+        }
+
+        // Ensure a completion chunk is always sent, even if the stream ended without [DONE] or finish_reason
+        if (!completionSent)
+        {
+            yield return new Streaming.StreamChunk
+            {
+                IsFirstChunk = isFirstChunk,
+                ElapsedTime = stopwatch?.Elapsed ?? TimeSpan.Zero,
+                ChunkIndex = chunkIndex,
+                Completion = new Streaming.CompletionMetadata
+                {
+                    FinishReason = "stop",
+                    Model = request.Model,
+                    Id = "synthetic-completion"
+                },
+                Raw = new Models.ChatCompletionStreamResponse
+                {
+                    Id = "synthetic-completion",
+                    Model = request.Model,
+                    Object = "chat.completion.chunk",
+                    Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    Choices = new List<Models.StreamingChoice>
+                    {
+                        new Models.StreamingChoice
+                        {
+                            Index = 0,
+                            FinishReason = "stop",
+                            Delta = new Models.MessageDelta()
+                        }
+                    }
+                }
+            };
         }
     }
 

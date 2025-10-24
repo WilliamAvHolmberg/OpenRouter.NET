@@ -78,6 +78,87 @@ await foreach (var chunk in client.StreamAsync(request))
 }
 ```
 
+### SSE Streaming (for Web APIs)
+
+Perfect for building real-time streaming endpoints that work with browsers using Server-Sent Events:
+
+```csharp
+using OpenRouter.NET;
+using OpenRouter.NET.Sse;
+using OpenRouter.NET.Models;
+
+// In your ASP.NET endpoint
+app.MapPost("/api/chat/stream", async (HttpContext context, ChatRequest body) =>
+{
+    var client = new OpenRouterClient("your-api-key");
+    
+    var request = new ChatCompletionRequest
+    {
+        Model = "anthropic/claude-3.5-sonnet",
+        Messages = body.Messages
+    };
+
+    // One line to stream everything as SSE!
+    await client.StreamAsSseAsync(request, context.Response);
+});
+
+record ChatRequest(List<Message> Messages);
+```
+
+**Client-side (JavaScript/TypeScript):**
+
+Since this is a POST endpoint with a request body, use the fetch API with streaming:
+
+```javascript
+async function streamChat(messages) {
+    const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages })
+    });
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(line => line.startsWith('data: '));
+        
+        for (const line of lines) {
+            const event = JSON.parse(line.slice(6));
+            if (event.type === 'text') {
+                appendText(event.textDelta);
+            }
+        }
+    }
+}
+```
+
+> **Note:** The standard `EventSource` API only supports GET requests. For POST endpoints with request bodies, use fetch with streaming as shown above. See [SSE Helper Documentation](src/Sse/README.md) for complete client examples, event types, and TypeScript definitions.
+
+**This automatically handles:**
+- ✅ Text deltas
+- ✅ Tool calls (server-side and client-side)
+- ✅ Artifacts (started, content, completed)
+- ✅ Completion events
+- ✅ Proper SSE formatting
+- ✅ Headers and connection management
+
+**Event types sent:**
+- `text` - Text content deltas
+- `tool_executing` - Tool starting
+- `tool_completed` - Tool finished with result
+- `tool_error` - Tool failed
+- `tool_client` - Client-side tool call requested
+- `artifact_started` - Artifact beginning
+- `artifact_content` - Artifact content chunk
+- `artifact_completed` - Artifact finished
+- `completion` - Stream finished
+- `error` - Error occurred
+
 ### Artifacts
 
 ```csharp
@@ -173,6 +254,10 @@ dotnet run
 ## Documentation
 
 Full documentation coming soon.
+
+## Known Issues
+
+**Next.js SSE Streaming**: Next.js compression buffers responses before sending, causing SSE streams to arrive as one big chunk. Set `compress: false` in `next.config.js` to fix.
 
 ## Contributing
 
