@@ -53,44 +53,39 @@ public class ArtifactParser
             if (_state == ParserState.Normal)
             {
                 var startIdx = bufferText.IndexOf("<artifact");
-                
+
                 if (startIdx == -1)
                 {
-                    // Check if buffer ends with potential start of tag
-                    if (bufferText.Length > 0 && bufferText.EndsWith("<") ||
-                        bufferText.Length > 1 && bufferText.EndsWith("<a") ||
-                        bufferText.Length > 2 && bufferText.EndsWith("<ar") ||
-                        bufferText.Length > 3 && bufferText.EndsWith("<art") ||
-                        bufferText.Length > 4 && bufferText.EndsWith("<artif") ||
-                        bufferText.Length > 5 && bufferText.EndsWith("<artifa") ||
-                        bufferText.Length > 6 && bufferText.EndsWith("<artifac"))
+                    // No <artifact found in buffer
+                    // Check if buffer might contain the start of a tag that will complete in next chunk
+                    bool mightBePartialTag = false;
+
+                    for (int i = 1; i <= Math.Min(9, bufferText.Length); i++)
                     {
-                        // Keep potential tag start in buffer
-                        var potentialTagStart = bufferText.Length;
-                        for (int i = Math.Min(8, bufferText.Length); i > 0; i--)
+                        if ("<artifact".StartsWith(bufferText.Substring(bufferText.Length - i)))
                         {
-                            if ("<artifact".StartsWith(bufferText.Substring(bufferText.Length - i)))
+                            mightBePartialTag = true;
+                            var textBeforePartial = bufferText.Substring(0, bufferText.Length - i);
+                            if (textBeforePartial.Length > 0)
                             {
-                                potentialTagStart = bufferText.Length - i;
-                                break;
+                                result.TextDelta += textBeforePartial;
                             }
-                        }
-                        
-                        if (potentialTagStart > 0)
-                        {
-                            result.TextDelta += bufferText.Substring(0, potentialTagStart);
                             _buffer.Clear();
-                            _buffer.Append(bufferText.Substring(potentialTagStart));
+                            _buffer.Append(bufferText.Substring(bufferText.Length - i));
+                            break;
                         }
                     }
-                    else
+
+                    if (!mightBePartialTag)
                     {
+                        // No partial tag, emit everything as text
                         result.TextDelta += bufferText;
                         _buffer.Clear();
                     }
                     break;
                 }
-                
+
+                // Found <artifact, extract any text before it
                 if (startIdx > 0)
                 {
                     result.TextDelta += bufferText.Substring(0, startIdx);
@@ -98,11 +93,13 @@ public class ArtifactParser
                     _buffer.Clear();
                     _buffer.Append(bufferText);
                 }
-                
+
+                // Now check if we have the complete opening tag (with closing >)
                 var closeTagIdx = bufferText.IndexOf('>');
                 if (closeTagIdx == -1)
                 {
-                    // Incomplete opening tag
+                    // Incomplete opening tag - keep entire buffer and wait for more chunks
+                    // DO NOT emit as TextDelta, DO NOT process further
                     break;
                 }
                 
