@@ -152,40 +152,89 @@ All events share a base structure:
 
 ## Client-Side Consumption
 
-### JavaScript (Browser)
+> **Important:** The standard browser `EventSource` API only supports GET requests without request bodies. Since our endpoints accept POST requests with chat history and configuration, we use the fetch API with streaming instead.
+
+### JavaScript (Browser) - Complete Example
 
 ```javascript
-const eventSource = new EventSource('/api/chat/stream', {
-    method: 'POST',
-    body: JSON.stringify({ message: 'Tell me a story' })
-});
+async function streamChat(messages, options = {}) {
+    const response = await fetch('/api/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+            messages,
+            model: options.model || 'anthropic/claude-3.5-sonnet'
+        })
+    });
 
-eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    
-    switch (data.type) {
+    if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        buffer += decoder.decode(value, { stream: true });
+        
+        // Process complete SSE messages (separated by \n\n)
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || ''; // Keep incomplete message in buffer
+        
+        for (const part of parts) {
+            const lines = part.split('\n');
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.slice(6));
+                    handleEvent(data);
+                }
+            }
+        }
+    }
+}
+
+function handleEvent(event) {
+    switch (event.type) {
         case 'text':
-            appendText(data.textDelta);
+            appendText(event.textDelta);
             break;
         case 'tool_executing':
-            showToolSpinner(data.toolName);
+            showToolSpinner(event.toolName);
             break;
         case 'tool_completed':
-            displayToolResult(data.toolName, data.result);
+            displayToolResult(event.toolName, event.result);
             break;
         case 'artifact_completed':
-            displayArtifact(data.title, data.content);
+            displayArtifact(event.title, event.content);
             break;
         case 'completion':
             hideSpinner();
+            console.log('Stream finished:', event.finishReason);
+            break;
+        case 'error':
+            showError(event.message);
             break;
     }
-};
+}
+
+// Usage
+const messages = [
+    { role: 'user', content: 'Tell me a story' }
+];
+
+streamChat(messages).catch(err => {
+    console.error('Streaming failed:', err);
+});
 ```
 
-### TypeScript
+### TypeScript - Type-Safe Implementation
 
 ```typescript
+// Event type definitions
 interface SseEvent {
     type: string;
     chunkIndex: number;
@@ -197,26 +246,257 @@ interface TextEvent extends SseEvent {
     textDelta: string;
 }
 
+interface ToolExecutingEvent extends SseEvent {
+    type: 'tool_executing';
+    toolName: string;
+    toolId: string;
+    arguments: string;
+}
+
 interface ToolCompletedEvent extends SseEvent {
     type: 'tool_completed';
     toolName: string;
     toolId: string;
+    arguments: string;
     result: string;
     executionMs: number;
 }
 
-// ... other event types
+interface ToolErrorEvent extends SseEvent {
+    type: 'tool_error';
+    toolName: string;
+    toolId: string;
+    error: string;
+}
 
-const eventSource = new EventSource('/api/chat/stream');
+interface ArtifactCompletedEvent extends SseEvent {
+    type: 'artifact_completed';
+    artifactId: string;
+    title: string;
+    artifactType: string;
+    language?: string;
+    content: string;
+}
 
-eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data) as SseEvent;
-    
-    if (data.type === 'text') {
-        const textEvent = data as TextEvent;
-        appendText(textEvent.textDelta);
+interface CompletionEvent extends SseEvent {
+    type: 'completion';
+    finishReason?: string;
+    model?: string;
+    id?: string;
+}
+
+interface ErrorEvent extends SseEvent {
+    type: 'error';
+    message: string;
+    details?: string;
+}
+
+// Message types
+interface Message {
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+}
+
+interface ChatRequest {
+    messages: Message[];
+    model?: string;
+}
+
+// Event handler type
+type EventHandler = (event: SseEvent) => void;
+
+// Streaming client class
+class OpenRouterStreamClient {
+    private handlers: Map<string, EventHandler[]> = new Map();
+
+    on(eventType: string, handler: EventHandler): void {
+        if (!this.handlers.has(eventType)) {
+            this.handlers.set(eventType, []);
+        }
+        this.handlers.get(eventType)!.push(handler);
     }
-};
+
+    private emit(event: SseEvent): void {
+        const handlers = this.handlers.get(event.type);
+        if (handlers) {
+            handlers.forEach(handler => handler(event));
+        }
+        
+        // Also emit to wildcard handlers
+        const wildcardHandlers = this.handlers.get('*');
+        if (wildcardHandlers) {
+            wildcardHandlers.forEach(handler => handler(event));
+        }
+    }
+
+    async stream(endpoint: string, request: ChatRequest): Promise<void> {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(request)
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const reader = response.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
+            
+            for (const part of parts) {
+                const lines = part.split('\n');
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const event = JSON.parse(line.slice(6)) as SseEvent;
+                            this.emit(event);
+                        } catch (err) {
+                            console.error('Failed to parse SSE event:', err);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Usage example
+const client = new OpenRouterStreamClient();
+
+client.on('text', (event) => {
+    const textEvent = event as TextEvent;
+    appendText(textEvent.textDelta);
+});
+
+client.on('tool_completed', (event) => {
+    const toolEvent = event as ToolCompletedEvent;
+    console.log(`Tool ${toolEvent.toolName} completed in ${toolEvent.executionMs}ms`);
+});
+
+client.on('completion', (event) => {
+    const completion = event as CompletionEvent;
+    console.log('Stream finished:', completion.finishReason);
+});
+
+// Start streaming
+await client.stream('/api/chat/stream', {
+    messages: [{ role: 'user', content: 'Hello!' }],
+    model: 'anthropic/claude-3.5-sonnet'
+});
+```
+
+### React Hook Example
+
+```typescript
+import { useState, useCallback } from 'react';
+
+interface UseStreamChatOptions {
+    onText?: (text: string) => void;
+    onToolCall?: (toolName: string, result: string) => void;
+    onComplete?: () => void;
+    onError?: (error: string) => void;
+}
+
+export function useStreamChat(options: UseStreamChatOptions = {}) {
+    const [isStreaming, setIsStreaming] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const streamChat = useCallback(async (messages: Message[]) => {
+        setIsStreaming(true);
+        setError(null);
+
+        try {
+            const response = await fetch('/api/chat/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const reader = response.body!.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                
+                buffer += decoder.decode(value, { stream: true });
+                
+                const parts = buffer.split('\n\n');
+                buffer = parts.pop() || '';
+                
+                for (const part of parts) {
+                    const lines = part.split('\n');
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const event = JSON.parse(line.slice(6)) as SseEvent;
+                            
+                            switch (event.type) {
+                                case 'text':
+                                    options.onText?.((event as TextEvent).textDelta);
+                                    break;
+                                case 'tool_completed':
+                                    const tool = event as ToolCompletedEvent;
+                                    options.onToolCall?.(tool.toolName, tool.result);
+                                    break;
+                                case 'completion':
+                                    options.onComplete?.();
+                                    break;
+                                case 'error':
+                                    options.onError?.((event as ErrorEvent).message);
+                                    break;
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (err) {
+            const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+            setError(errorMsg);
+            options.onError?.(errorMsg);
+        } finally {
+            setIsStreaming(false);
+        }
+    }, [options]);
+
+    return { streamChat, isStreaming, error };
+}
+
+// Usage in component
+function ChatComponent() {
+    const [text, setText] = useState('');
+    
+    const { streamChat, isStreaming } = useStreamChat({
+        onText: (delta) => setText(prev => prev + delta),
+        onComplete: () => console.log('Done!'),
+    });
+
+    return (
+        <div>
+            <button 
+                onClick={() => streamChat([{ role: 'user', content: 'Hello!' }])}
+                disabled={isStreaming}
+            >
+                Send
+            </button>
+            <div>{text}</div>
+        </div>
+    );
+}
 ```
 
 ## Advanced Usage
@@ -299,15 +579,33 @@ await client.StreamAsSseAsync(request, context.Response);
 - Ensure you're using `text/event-stream` content type (helper does this automatically)
 - Check that responses are being flushed (helper does this automatically)
 - Verify CORS settings if calling from different domain
+- Check browser console for fetch errors or CORS issues
+- Verify the endpoint returns 200 OK before streaming starts
 
 ### Connection drops
 - Use cancellation tokens properly
-- Consider implementing reconnection logic on client side
+- Implement reconnection logic on client side (fetch doesn't auto-reconnect like EventSource)
 - Check server timeout settings
+- Consider adding heartbeat/keep-alive mechanism for long-running streams
 
 ### Invalid JSON
 - Ensure your tool results are JSON-serializable
 - Use custom `JsonSerializerOptions` if needed
+- Check that SSE message parsing correctly splits on `\n\n`
+
+### Why not use EventSource?
+The browser's native `EventSource` API only supports:
+- ✅ GET requests
+- ❌ No request body support
+- ❌ No custom headers (except credentials)
+
+For chat applications where you need to send:
+- Conversation history
+- Model configuration  
+- System prompts
+- Tool definitions
+
+...you must use POST with a request body. The fetch API with streaming provides the same functionality with more flexibility.
 
 ## Future Enhancements
 
