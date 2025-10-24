@@ -69,9 +69,9 @@ public class SseStreamingIntegrationTests : IntegrationTestBase
                         LogSuccess($"🎨 Artifact started: {artifactStarted.Title}");
                         break;
 
-                    case ArtifactContentEvent artifactContent:
-                        artifactContentEvents.Add(artifactContent);
-                        eventLog.AppendLine($"[{events.Count:000}] [{artifactContent.ElapsedMs:0000}ms] ARTIFACT_CONTENT: {artifactContent.ContentDelta.Length} chars (id={artifactContent.ArtifactId})");
+                    case ArtifactContentEvent contentEvent:
+                        artifactContentEvents.Add(contentEvent);
+                        eventLog.AppendLine($"[{events.Count:000}] [{contentEvent.ElapsedMs:0000}ms] ARTIFACT_CONTENT: {contentEvent.ContentDelta.Length} chars (id={contentEvent.ArtifactId})");
                         break;
 
                     case ArtifactCompletedEvent artifactCompleted:
@@ -80,10 +80,10 @@ public class SseStreamingIntegrationTests : IntegrationTestBase
                         LogSuccess($"✅ Artifact completed: {artifactCompleted.Title} ({artifactCompleted.Content.Length} chars)");
                         break;
 
-                    case CompletionEvent completion:
-                        completionEvents.Add(completion);
-                        eventLog.AppendLine($"[{events.Count:000}] [{completion.ElapsedMs:0000}ms] COMPLETION: reason={completion.FinishReason}, model={completion.Model}");
-                        LogSuccess($"🏁 Stream completed: {completion.FinishReason}");
+                    case CompletionEvent completionEvent:
+                        completionEvents.Add(completionEvent);
+                        eventLog.AppendLine($"[{events.Count:000}] [{completionEvent.ElapsedMs:0000}ms] COMPLETION: reason={completionEvent.FinishReason}, model={completionEvent.Model}");
+                        LogSuccess($"🏁 Stream completed: {completionEvent.FinishReason}");
                         break;
 
                     case ToolExecutingEvent toolExecuting:
