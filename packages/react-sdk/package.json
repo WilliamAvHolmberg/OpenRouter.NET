@@ -1,0 +1,65 @@
+{
+  "name": "@openrouter-dotnet/react",
+  "version": "0.2.1",
+  "description": "React SDK for OpenRouter streaming chat with artifacts and tool calls",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "rollup -c",
+    "dev": "rollup -c --watch",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build",
+    "test": "echo \"No tests yet\" && exit 0"
+  },
+  "keywords": [
+    "openrouter",
+    "react",
+    "chat",
+    "streaming",
+    "ai",
+    "artifacts",
+    "tools",
+    "hooks"
+  ],
+  "author": "William Holmberg",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/williamholmberg/OpenRouter.NET.git",
+    "directory": "packages/react-sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/williamholmberg/OpenRouter.NET/issues"
+  },
+  "homepage": "https://github.com/williamholmberg/OpenRouter.NET#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.0.0",
+    "tslib": "^2.6.0",
+    "rollup": "^4.0.0",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "rollup-plugin-dts": "^6.0.0"
+  }
+}
