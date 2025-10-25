@@ -487,3 +487,5 @@ diagnostic_output_*/
 # Sample artifacts and temporary files
 **/samples/**/artifacts/
 **/samples/**/*.tmp
+
+**/openrouter-dotnet-react*.tgz
