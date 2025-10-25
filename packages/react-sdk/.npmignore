@@ -1,0 +1,29 @@
+# Source files
+src/
+tsconfig.json
+rollup.config.js
+
+# Development files
+.gitignore
+.npmignore
+
+# Build artifacts
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+
+# Tests
+tests/
+**/*.test.ts
+**/*.test.tsx
+**/*.spec.ts
+**/*.spec.tsx
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,52 @@
+@samples_HostAddress = http://localhost:5282
+
+### Get available models
+GET {{samples_HostAddress}}/api/models
+
+### Simple message
+POST {{samples_HostAddress}}/api/stream
+Content-Type: application/json
+
+{
+  "message": "What's 25 + 17?"
+}
+
+### Message with tool usage
+POST {{samples_HostAddress}}/api/stream
+Content-Type: application/json
+
+{
+  "message": "Calculate 123 * 456, then divide the result by 2"
+}
+
+### Request code artifact
+POST {{samples_HostAddress}}/api/stream
+Content-Type: application/json
+
+{
+  "message": "Create a simple hello world function in Python"
+}
+
+### Conversation with specific ID
+POST {{samples_HostAddress}}/api/stream
+Content-Type: application/json
+
+{
+  "message": "Hello! Can you help me with math?",
+  "conversationId": "test-conversation-1"
+}
+
+### Continue conversation
+POST {{samples_HostAddress}}/api/stream
+Content-Type: application/json
+
+{
+  "message": "What's 50 times 20?",
+  "conversationId": "test-conversation-1"
+}
+
+### Clear conversation
+DELETE {{samples_HostAddress}}/api/conversation/test-conversation-1
+
+###
+

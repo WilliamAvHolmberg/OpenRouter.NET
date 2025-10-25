@@ -1,0 +1,64 @@
+{
+  "name": "@openrouter-net/sse-client",
+  "version": "1.0.0",
+  "description": "Lightweight, type-safe SSE client for OpenRouter.NET streaming endpoints",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "lint": "eslint src",
+    "test": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "openrouter",
+    "sse",
+    "server-sent-events",
+    "streaming",
+    "ai",
+    "llm",
+    "react",
+    "typescript"
+  ],
+  "author": "OpenRouter.NET",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/WilliamAvHolmberg/OpenRouter.NET.git",
+    "directory": "packages/sse-client"
+  },
+  "bugs": {
+    "url": "https://github.com/WilliamAvHolmberg/OpenRouter.NET/issues"
+  },
+  "homepage": "https://github.com/WilliamAvHolmberg/OpenRouter.NET#readme",
+  "peerDependencies": {
+    "react": ">=18.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}
+
