@@ -46,6 +46,10 @@ public static class ConfigurationManager
             Messages = new List<Message>
             {
                 Message.FromUser("Create a simple React button component with TypeScript and CSS")
+            },
+            Reasoning = new ReasoningConfig
+            {
+                Exclude = true
             }
         };
 
@@ -88,6 +92,10 @@ public static class ConfigurationManager
             {
                 Enabled = true,
                 MaxIterations = 5
+            },
+            Reasoning = new ReasoningConfig
+            {
+                Exclude = true
             }
         };
 
@@ -140,7 +148,11 @@ public static class ConfigurationManager
         var request = new ChatCompletionRequest
         {
             Model = selectedModel,
-            Messages = new List<Message> { Message.FromUser(userMessage) }
+            Messages = new List<Message> { Message.FromUser(userMessage) },
+            Reasoning = new ReasoningConfig
+            {
+                Exclude = true
+            }
         };
 
         if (enableArtifacts)

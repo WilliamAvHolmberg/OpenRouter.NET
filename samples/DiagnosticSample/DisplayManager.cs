@@ -155,6 +155,7 @@ public static class DisplayManager
     {
         AnsiConsole.MarkupLine($"\n[bold green]📁 All files saved to:[/] [cyan]{outputDir}[/]");
         AnsiConsole.MarkupLine($"   • [dim]raw_stream.txt[/] - Complete SSE stream");
+        AnsiConsole.MarkupLine($"   • [dim]raw_text.txt[/] - Raw text content (character-by-character)");
         AnsiConsole.MarkupLine($"   • [dim]parsed_events.txt[/] - Event log");
         AnsiConsole.MarkupLine($"   • [dim]summary.txt[/] - Statistics & full text");
 
