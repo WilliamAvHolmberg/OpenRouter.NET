@@ -5,7 +5,7 @@
  * Perfect for basic chat or completion UIs
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { OpenRouterClient } from '../client';
 import type { StreamingTextState, ClientConfig, CompletionEvent, ErrorEvent } from '../types';
 
@@ -25,7 +25,13 @@ export function useStreamingText({
   const [error, setError] = useState<ErrorEvent | null>(null);
   const [completion, setCompletion] = useState<CompletionEvent | null>(null);
 
-  const clientRef = useRef(new OpenRouterClient(baseUrl, config));
+  // Memoize client creation to handle baseUrl/config changes properly
+  const client = useMemo(() => {
+    return new OpenRouterClient(baseUrl, config);
+  }, [baseUrl, config]);
+
+  const clientRef = useRef(client);
+  clientRef.current = client;
 
   const stream = useCallback(
     async (message: string, options?: { model?: string; conversationId?: string }) => {

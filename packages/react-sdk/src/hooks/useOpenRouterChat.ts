@@ -5,7 +5,7 @@
  * artifacts, and tool calls - all in correct order
  */
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { OpenRouterClient } from '../client';
 import type {
   ChatMessage,
@@ -55,14 +55,13 @@ export function useOpenRouterChat({
     parsedEvents: any[];
   }>({ rawLines: [], parsedEvents: [] });
 
-  const clientRef = useRef<OpenRouterClient | null>(null);
   const conversationIdRef = useRef(initialConversationId || `conv_${Date.now()}`);
   const orderCounterRef = useRef(0);
   const lastUserMessageRef = useRef<string>('');
 
-  // Initialize/update client with debug callbacks
-  if (!clientRef.current || clientRef.current.baseUrl !== baseUrl) {
-    clientRef.current = new OpenRouterClient(baseUrl, {
+  // Memoize client creation to prevent unnecessary recreations
+  const client = useMemo(() => {
+    return new OpenRouterClient(baseUrl, {
       ...config,
       onRawLine: (line: string) => {
         setDebugData((prev) => ({
@@ -77,7 +76,10 @@ export function useOpenRouterChat({
         }));
       },
     });
-  }
+  }, [baseUrl, config]);
+
+  const clientRef = useRef(client);
+  clientRef.current = client;
 
   // Log debug data to console when enabled
   if (debugMode) {
@@ -151,7 +153,10 @@ export function useOpenRouterChat({
    * Send a message and start streaming
    */
   const sendMessage = useCallback(
-    async (message: string, options?: { model?: string }) => {
+    async (
+      message: string,
+      options?: { model?: string; [key: string]: any }
+    ) => {
       // Clear debug data for new message
       if (debugMode) {
         setDebugData({ rawLines: [], parsedEvents: [] });
@@ -178,6 +183,7 @@ export function useOpenRouterChat({
 
         await clientRef.current.stream(
           {
+            ...options,
             message,
             model: options?.model || defaultModel,
             conversationId: conversationIdRef.current,

@@ -1,6 +1,6 @@
 {
   "name": "@openrouter-dotnet/react",
-  "version": "0.2.1",
+  "version": "0.2.31",
   "description": "React SDK for OpenRouter streaming chat with artifacts and tool calls",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",

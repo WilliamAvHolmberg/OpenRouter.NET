@@ -38,8 +38,10 @@ export class OpenRouterClient {
   /**
    * Get available models
    */
-  async getModels(): Promise<Model[]> {
-    const response = await fetch(`${this.baseUrl}/models`);
+  async getModels(signal?: AbortSignal): Promise<Model[]> {
+    const response = await fetch(`${this.baseUrl}/models`, {
+      signal,
+    });
 
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);

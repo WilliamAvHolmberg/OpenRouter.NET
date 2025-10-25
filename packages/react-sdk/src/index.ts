@@ -11,7 +11,6 @@ export { OpenRouterClient } from './client.ts';
 export { useOpenRouterChat } from './hooks/useOpenRouterChat.ts';
 export { useStreamingText } from './hooks/useStreamingText.ts';
 export { useOpenRouterModels } from './hooks/useOpenRouterModels.ts';
-export type { Model } from './hooks/useOpenRouterModels.ts';
 
 // Types
 export type { 
@@ -42,6 +41,7 @@ export type {
   // Config
   ClientConfig,
   ChatRequest,
+  EnabledArtifact,
 
   // Hook Types
   ChatState,

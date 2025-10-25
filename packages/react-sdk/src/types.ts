@@ -188,16 +188,32 @@ export interface ChatRequest {
   message: string;
   model?: string;
   conversationId?: string;
+  /** Optional bag for arbitrary backend-recognized extras (e.g., enabledArtifacts) */
+  customArguments?: Record<string, any>;
 }
 
 export interface Model {
   id: string;
   name: string;
   contextLength: number;
-  pricing?: {
+  pricing: {
     prompt: string;
     completion: string;
+    image: string;
+    request: string;
   };
+}
+
+// Artifact enabling config (sent to backend)
+export interface EnabledArtifact {
+  id?: string;
+  enabled?: boolean;
+  type?: string; // e.g., "code", "document"
+  preferredTitle?: string;
+  language?: string; // e.g., 'tsx.reactrunner'
+  instruction?: string;
+  outputFormat?: string;
+  attributes?: Record<string, string>;
 }
 
 // ============================================================================
@@ -251,7 +267,7 @@ export interface ChatState {
 /** Actions returned by useOpenRouterChat */
 export interface ChatActions {
   /** Send a message and start streaming response */
-  sendMessage: (message: string, options?: { model?: string }) => Promise<void>;
+  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any> }) => Promise<void>;
   /** Clear conversation history */
   clearConversation: () => Promise<void>;
   /** Cancel current stream */
