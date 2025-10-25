@@ -676,39 +676,6 @@ public class OpenRouterClient
                 yield return chunkToYield;
             }
         }
-
-        // Ensure a completion chunk is always sent, even if the stream ended without [DONE] or finish_reason
-        if (!completionSent)
-        {
-            yield return new Streaming.StreamChunk
-            {
-                IsFirstChunk = isFirstChunk,
-                ElapsedTime = stopwatch?.Elapsed ?? TimeSpan.Zero,
-                ChunkIndex = chunkIndex,
-                Completion = new Streaming.CompletionMetadata
-                {
-                    FinishReason = "stop",
-                    Model = request.Model,
-                    Id = "synthetic-completion"
-                },
-                Raw = new Models.ChatCompletionStreamResponse
-                {
-                    Id = "synthetic-completion",
-                    Model = request.Model,
-                    Object = "chat.completion.chunk",
-                    Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                    Choices = new List<Models.StreamingChoice>
-                    {
-                        new Models.StreamingChoice
-                        {
-                            Index = 0,
-                            FinishReason = "stop",
-                            Delta = new Models.MessageDelta()
-                        }
-                    }
-                }
-            };
-        }
     }
 
     public async Task<(ChatCompletionResponse, List<Message>)> ProcessMessageAsync(
