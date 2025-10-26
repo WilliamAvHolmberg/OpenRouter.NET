@@ -287,8 +287,7 @@ public class OpenRouterClient
             }
 
             conversationHistory.Add(completeMessage);
-            
-            bool hasClientToolCall = false;
+        
 
             if (hasToolCalls && completeMessage.ToolCalls != null)
             {
@@ -359,8 +358,13 @@ public class OpenRouterClient
                             },
                             Raw = null!
                         };
-                        
-                        hasClientToolCall = true;
+
+                        conversationHistory.Add(new Message
+                        {
+                            Role = "tool",
+                            ToolCallId = toolCall.Id,
+                            Content = "Client tool executed"
+                        });
                         continue;
                     }
 
@@ -452,11 +456,6 @@ public class OpenRouterClient
                 }
             }
             else
-            {
-                hasToolCalls = false;
-            }
-            
-            if (hasClientToolCall)
             {
                 hasToolCalls = false;
             }
@@ -676,221 +675,6 @@ public class OpenRouterClient
                 yield return chunkToYield;
             }
         }
-    }
-
-    public async Task<(ChatCompletionResponse, List<Message>)> ProcessMessageAsync(
-        ChatCompletionRequest request,
-        int maxToolCalls = 5,
-        CancellationToken cancellationToken = default)
-    {
-        if (request == null) throw new ArgumentNullException(nameof(request));
-
-        if (_tools.Count > 0 && request.Tools == null)
-        {
-            request.Tools = _tools;
-        }
-
-        var toolCallsCount = 0;
-        var hasToolCalls = false;
-        ChatCompletionResponse? lastResponse = null;
-        StreamState currentState = StreamState.Loading;
-
-        RaiseEvent(StreamEventType.StateChange, currentState);
-
-        do
-        {
-            if (toolCallsCount >= maxToolCalls)
-            {
-                RaiseEvent(
-                    StreamEventType.Error,
-                    StreamState.Complete,
-                    toolResult: $"Reached maximum tool call limit of {maxToolCalls}"
-                );
-                break;
-            }
-
-            if (request.Stream == true)
-            {
-                currentState = StreamState.Text;
-                RaiseEvent(StreamEventType.StateChange, currentState);
-
-                hasToolCalls = false;
-
-                var completeMessage = await this.StreamAndAccumulateAsync(
-                    request,
-                    chunk =>
-                    {
-                        if (chunk.TextDelta != null)
-                        {
-                            RaiseEvent(StreamEventType.TextContent, currentState, textDelta: chunk.TextDelta);
-                        }
-
-                        if (chunk.ToolCallDelta != null)
-                        {
-                            hasToolCalls = true;
-                            currentState = StreamState.ToolCall;
-                            RaiseEvent(StreamEventType.StateChange, currentState);
-                        }
-
-                        if (chunk.Completion != null)
-                        {
-                            if (chunk.Completion.FinishReason == "tool_calls")
-                            {
-                                hasToolCalls = true;
-                            }
-                            else if (chunk.Completion.FinishReason == "stop" || chunk.Completion.FinishReason == "length")
-                            {
-                                currentState = StreamState.Complete;
-                                RaiseEvent(StreamEventType.StateChange, currentState);
-                            }
-                        }
-                    },
-                    cancellationToken
-                );
-
-                request.Messages.Add(completeMessage);
-
-                hasToolCalls = completeMessage.ToolCalls != null && completeMessage.ToolCalls.Length > 0;
-
-                if (!hasToolCalls)
-                {
-                    break;
-                }
-
-                lastResponse = new ChatCompletionResponse
-                {
-                    Id = "stream-processed",
-                    Model = request.Model,
-                    Object = "chat.completion",
-                    Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                    Choices = new List<Choice>
-                    {
-                        new Choice
-                        {
-                            Index = 0,
-                            FinishReason = "tool_calls",
-                            Message = completeMessage
-                        }
-                    }
-                };
-            }
-            else
-            {
-                lastResponse = await CreateChatCompletionAsync(request, cancellationToken);
-
-                if (lastResponse?.Choices?.FirstOrDefault()?.Message != null)
-                {
-                    request.Messages.Add(lastResponse.Choices.FirstOrDefault()!.Message!);
-                }
-            }
-
-            var choice = lastResponse?.Choices?.FirstOrDefault();
-            if (choice?.Message?.ToolCalls != null && choice.Message.ToolCalls.Length > 0)
-            {
-                hasToolCalls = true;
-                toolCallsCount++;
-
-                foreach (var toolCall in choice.Message.ToolCalls)
-                {
-                    if (toolCall.Function != null)
-                    {
-                        try
-                        {
-                            var toolName = toolCall.Function.Name;
-                            var toolArgs = toolCall.Function.Arguments;
-
-                            if (string.IsNullOrEmpty(toolName))
-                            {
-                                Log("Warning: Received tool call with missing function name, skipping.");
-                                continue;
-                            }
-
-                            currentState = StreamState.ToolCall;
-                            RaiseEvent(
-                                StreamEventType.ToolCall,
-                                currentState,
-                                toolName,
-                                toolCall: toolCall
-                            );
-
-                            var result = ExecuteTool(toolName, toolArgs!);
-
-                            string resultString = (result is string str)
-                                ? str
-                                : JsonSerializer.Serialize(result, _jsonOptions);
-
-                            RaiseEvent(
-                                StreamEventType.ToolResult,
-                                currentState,
-                                toolName,
-                                toolCall: toolCall,
-                                toolResult: resultString
-                            );
-
-                            request.Messages.Add(new Message
-                            {
-                                Role = "tool",
-                                ToolCallId = toolCall.Id,
-                                Content = resultString
-                            });
-                        }
-                        catch (Exception ex)
-                        {
-                            var errorMessage = $"Error executing tool: {ex.Message}";
-                            Log($"Tool execution error: {ex}");
-
-                            RaiseEvent(
-                                StreamEventType.Error,
-                                currentState,
-                                toolCall?.Function?.Name,
-                                toolCall: toolCall,
-                                toolResult: errorMessage
-                            );
-
-                            request.Messages.Add(new Message
-                            {
-                                Role = "tool",
-                                ToolCallId = toolCall!.Id,
-                                Content = errorMessage
-                            });
-                        }
-                    }
-                }
-            }
-            else
-            {
-                hasToolCalls = false;
-            }
-
-        } while (hasToolCalls && toolCallsCount < maxToolCalls);
-
-        RaiseEvent(StreamEventType.StateChange, StreamState.Complete);
-
-        if (request.Stream == true && lastResponse == null)
-        {
-            lastResponse = new ChatCompletionResponse
-            {
-                Id = "stream-response",
-                Model = request.Model,
-                Object = "chat.completion",
-                Created = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-                Choices = new List<Choice>
-                {
-                    new Choice
-                    {
-                        Index = 0,
-                        FinishReason = "stop",
-                        Message = new Message
-                        {
-                            Role = "assistant",
-                            Content = "[Streaming response completed]"
-                        }
-                    }
-                }
-            };
-        }
-
-        return (lastResponse, request.Messages)!;
     }
 
     public async Task<List<ModelInfo>> GetModelsAsync(CancellationToken cancellationToken = default)

@@ -48,25 +48,29 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
     var client = new OpenRouterClient(apiKey);
 
     var calculator = new CalculatorTools();
-    
+    var orderClientTools = new OrderClientTools();
+
     // Check for API keys and register tools accordingly
     var tavilyApiKey = Environment.GetEnvironmentVariable("TAVILY_API_KEY");
     var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
-    
+
     // Always register calculator tools
     client
         .RegisterTool(calculator, nameof(calculator.Add))
         .RegisterTool(calculator, nameof(calculator.Subtract))
         .RegisterTool(calculator, nameof(calculator.Multiply))
         .RegisterTool(calculator, nameof(calculator.Divide));
-    
+
+    // Register client-side tool for Orders filtering (emits tool_client SSE)
+    client.RegisterTool(orderClientTools, nameof(orderClientTools.SetOrderFilters), ToolMode.ClientSide);
+
     // Register GitHub search if token is available
     if (!string.IsNullOrEmpty(githubToken))
     {
         var githubSearch = new GitHubSearchTools(githubToken);
         client.RegisterTool(githubSearch, nameof(githubSearch.SearchRepository));
     }
-    
+
     // Register web search (Tavily preferred, DuckDuckGo fallback)
     if (!string.IsNullOrEmpty(tavilyApiKey))
     {
@@ -96,8 +100,6 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
         Model = chatRequest.Model ?? "google/gemini-2.5-flash",
         Messages = history
     };
-
- 
 
     if (chatRequest.EnabledArtifacts != null)
     {
