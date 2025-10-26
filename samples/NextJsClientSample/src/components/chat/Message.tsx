@@ -11,39 +11,53 @@ import { ToolCallBlock } from './blocks/ToolCallBlock';
 interface MessageProps {
   message: ChatMessage;
   isLastMessage: boolean;
+  minHeight?: string;
 }
 
-export function Message({ message, isLastMessage }: MessageProps) {
+export function Message({ message, isLastMessage, minHeight = '70vh' }: MessageProps) {
   const isUser = message.role === 'user';
 
   return (
     <div
-      className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}
-      style={{ minHeight: isLastMessage ? '70vh' : '0px' }}
+      className={`flex ${isUser ? 'justify-end' : 'justify-start'} gap-3 animate-fade-in-up`}
+      style={{ minHeight: isLastMessage ? minHeight : '0px' }}
     >
+      {/* Avatar for AI only */}
+      {!isUser && (
+        <div className="flex-shrink-0">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xs font-medium shadow-lg shadow-blue-500/30">
+            AI
+          </div>
+        </div>
+      )}
+
       <div className={`max-w-[85%] ${isUser ? '' : 'w-full'}`}>
         {/* User bubble or assistant plain container */}
-        <div className={`${isUser ? 'rounded-2xl p-4 shadow-sm bg-indigo-600 text-white' : ''}`}>
+        <div className={`${
+          isUser
+            ? 'rounded-2xl p-3 bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20'
+            : 'rounded-2xl p-3 bg-white/60 backdrop-blur-md border border-white/20 shadow-lg'
+        }`}>
           {/* Render blocks in order */}
-          <div className={`space-y-4 ${isUser ? '' : ''}`}>
+          <div className={`space-y-3`}>
             {message.blocks.map((block) => (
               <BlockView key={block.id} block={block} isUserMessage={isUser} />
             ))}
           </div>
 
-          {/* Streaming indicator - assistant only, subtle three dots */}
+          {/* Streaming indicator - assistant only */}
           {!isUser && message.isStreaming && (
-            <div className="mt-2 flex items-center gap-1 text-indigo-600">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <div className="mt-2 flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
             </div>
           )}
 
           {/* Completion info */}
-          {message.completion && !isUser && (
-            <div className="mt-2 text-xs text-slate-500">
-              {message.completion.model} • {message.completion.finishReason}
+          {message.completion?.model && !isUser && (
+            <div className="mt-2 pt-2 border-t border-slate-100 text-xs text-slate-400">
+              {message.completion.model.split('/').pop()}
             </div>
           )}
         </div>

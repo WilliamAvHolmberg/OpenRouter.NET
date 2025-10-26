@@ -24,40 +24,45 @@ export function ToolCallBlock({ block }: ToolCallBlockProps) {
   const statusText = (s: 'executing' | 'completed' | 'error') =>
     s === 'executing' ? 'Running' : s === 'completed' ? 'Completed' : 'Error';
 
+  const statusColor = block.status === 'executing'
+    ? 'bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-700 border-blue-300/50'
+    : block.status === 'completed'
+    ? 'bg-gradient-to-r from-emerald-50 to-green-50 text-emerald-700 border-emerald-300/50'
+    : 'bg-gradient-to-r from-red-50 to-rose-50 text-red-700 border-red-300/50';
+
   return (
-    <div className={`border border-slate-200 rounded-xl bg-white shadow-sm ${isRunning && !expanded ? 'animate-pulse' : ''}`}>
+    <div className="border border-slate-200/50 rounded-xl bg-white/40 backdrop-blur-sm overflow-hidden shadow-sm">
       {/* One-line summary header (click to expand) */}
       <button
         type="button"
         onClick={() => setExpanded(!expanded)}
-        className="w-full px-3 py-2 flex items-center justify-between hover:bg-slate-50 rounded-xl text-left"
+        className="w-full px-3 py-2.5 flex items-center justify-between hover:bg-slate-100 transition-colors text-left"
       >
-        <div className="flex items-center gap-2 min-w-0 text-slate-800">
-          {/* Minimal tool glyph */}
-          <svg width="14" height="14" viewBox="0 0 24 24" className="text-slate-500" aria-hidden="true">
-            <path fill="currentColor" d="M21 7.5l-6.5 6.5-4-4L17 3.5a5 5 0 104 4zM3 21l6.9-1.4L6.9 16 3 21z" />
-          </svg>
-          <span className="text-sm font-medium truncate">{block.toolName}</span>
-          <span className="text-[11px] rounded-full px-2 py-0.5 border border-slate-200 text-slate-600">
-            {statusText(block.status)}
-          </span>
-          {/* Inline previews */}
-          {block.arguments && (
-            <span className="text-[11px] text-slate-500 truncate">• args: “{truncate(block.arguments)}”</span>
-          )}
-          {(block.result || block.error) && (
-            <span className="text-[11px] text-slate-500 truncate">• result: “{truncate(block.result || block.error)}”</span>
-          )}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex flex-col gap-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-slate-900 truncate">{block.toolName}</span>
+              <span className={`text-xs rounded-full px-3 py-0.5 border font-medium ${statusColor}`}>
+                {statusText(block.status)}
+              </span>
+            </div>
+            {/* Inline previews */}
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              {block.arguments && (
+                <span className="truncate">args: "{truncate(block.arguments, 30)}"</span>
+              )}
+            </div>
+          </div>
           {isRunning && (
-            <span className="flex items-center gap-1 ml-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '0ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '150ms' }} />
-              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{ animationDelay: '300ms' }} />
+            <span className="flex items-center gap-1 ml-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '0ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '150ms' }} />
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-bounce" style={{ animationDelay: '300ms' }} />
             </span>
           )}
         </div>
         <svg
-          className={`h-4 w-4 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          className={`h-5 w-5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
           viewBox="0 0 20 20"
           fill="currentColor"
           aria-hidden="true"

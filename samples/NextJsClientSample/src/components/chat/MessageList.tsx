@@ -14,9 +14,10 @@ import { ErrorDisplay } from './ErrorDisplay';
 interface MessageListProps {
   messages: ChatMessage[];
   error: any;
+  lastMessageMinHeight?: string; // Custom minHeight for last message, defaults to '70vh'
 }
 
-export function MessageList({ messages, error }: MessageListProps) {
+export function MessageList({ messages, error, lastMessageMinHeight = '70vh' }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(0);
 
@@ -39,7 +40,13 @@ export function MessageList({ messages, error }: MessageListProps) {
   }, [messages.length]);
 
   return (
-    <div ref={containerRef} className="h-full overflow-y-auto px-6 py-6 pb-24 space-y-6">
+    <div ref={containerRef} className="h-full overflow-y-auto px-6 py-6 pb-24 space-y-6 relative">
+      {/* Subtle gradient background orbs */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-20 left-20 w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
+        <div className="absolute bottom-20 right-20 w-96 h-96 bg-indigo-500/5 rounded-full blur-3xl" />
+      </div>
+
       {messages.length === 0 && <EmptyState />}
 
       {messages.map((message, index) => (
@@ -47,6 +54,7 @@ export function MessageList({ messages, error }: MessageListProps) {
           key={message.id}
           message={message}
           isLastMessage={index === messages.length - 1}
+          minHeight={lastMessageMinHeight}
         />
       ))}
 
