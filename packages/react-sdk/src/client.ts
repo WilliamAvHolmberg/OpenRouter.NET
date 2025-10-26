@@ -123,6 +123,9 @@ export class OpenRouterClient {
               case 'text':
                 options.onText?.(event.textDelta);
                 break;
+              case 'tool_client':
+                options.onToolClient?.(event as any);
+                break;
               case 'tool_executing':
                 options.onToolExecuting?.(event);
                 break;

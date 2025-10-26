@@ -25,6 +25,7 @@ import type {
   ErrorEvent,
   ToolErrorEvent,
   CompletionEvent,
+  ToolClientEvent,
 } from '../types';
 
 interface UseChatOptions {
@@ -32,6 +33,7 @@ interface UseChatOptions {
   conversationId?: string;
   defaultModel?: string;
   config?: ClientConfig;
+  onClientTool?: (event: ToolClientEvent) => void;
 }
 
 export function useOpenRouterChat({
@@ -39,6 +41,7 @@ export function useOpenRouterChat({
   conversationId: initialConversationId,
   defaultModel = 'openai/gpt-4o',
   config,
+  onClientTool,
 }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -189,6 +192,25 @@ export function useOpenRouterChat({
             conversationId: conversationIdRef.current,
           },
           {
+            onToolClient: (event: ToolClientEvent) => {
+              const toolBlock: ToolCallBlock = {
+                id: `block_${Date.now()}_${Math.random()}`,
+                type: 'tool_call',
+                order: orderCounterRef.current++,
+                timestamp: new Date(),
+                toolId: event.toolId,
+                toolName: event.toolName,
+                arguments: event.arguments,
+                status: 'executing',
+              };
+
+              updateStreamingMessage((msg) => ({
+                ...msg,
+                blocks: [...msg.blocks, toolBlock],
+              }));
+
+              onClientTool?.(event);
+            },
             onText: (textDelta: string) => {
               updateStreamingMessage((msg) => {
                 // Find the last text block (if any)

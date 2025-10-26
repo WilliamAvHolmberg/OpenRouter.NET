@@ -241,6 +241,7 @@ export interface StreamOptions {
   onToolExecuting?: (event: ToolExecutingEvent) => void;
   onToolCompleted?: (event: ToolCompletedEvent) => void;
   onToolError?: (event: ToolErrorEvent) => void;
+  onToolClient?: (event: ToolClientEvent) => void;
   onArtifactStarted?: (event: ArtifactStartedEvent) => void;
   onArtifactContent?: (event: ArtifactContentEvent) => void;
   onArtifactCompleted?: (event: ArtifactCompletedEvent) => void;
