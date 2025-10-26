@@ -35,6 +35,7 @@ public static class SseStreamingExtensions
         var toolCallsAccumulator = new Dictionary<int, ToolCall>();
         var hasContent = false;
         var currentMessageAdded = false;
+        var pendingClientToolResponses = new List<Message>();
 
         try
         {
@@ -56,6 +57,7 @@ public static class SseStreamingExtensions
                         contentBuilder.Append(chunk.TextDelta);
                         toolCallsAccumulator.Clear();
                         currentMessageAdded = false;
+                        pendingClientToolResponses.Clear();
                     }
                 }
 
@@ -96,8 +98,8 @@ public static class SseStreamingExtensions
                     hasContent = true;
                 }
 
-                // When we see a ServerTool chunk, finalize the current assistant message (if not already done)
-                if (chunk.ServerTool != null && hasContent && !currentMessageAdded)
+                // When we see a ServerTool or ClientTool chunk, finalize the current assistant message (if not already done)
+                if ((chunk.ServerTool != null || chunk.ClientTool != null) && hasContent && !currentMessageAdded)
                 {
                     var assistantMessage = new Message
                     {
@@ -112,9 +114,13 @@ public static class SseStreamingExtensions
 
                     messages.Add(assistantMessage);
                     currentMessageAdded = true;
+
+                    // Add any pending client tool responses now that assistant message is added
+                    messages.AddRange(pendingClientToolResponses);
+                    pendingClientToolResponses.Clear();
                 }
 
-                // Add tool result messages
+                // Add tool result messages for server-side tools
                 if (chunk.ServerTool?.State == ToolCallState.Completed)
                 {
                     messages.Add(new Message
@@ -132,6 +138,27 @@ public static class SseStreamingExtensions
                         ToolCallId = chunk.ServerTool.ToolId,
                         Content = chunk.ServerTool.Error ?? "Unknown error"
                     });
+                }
+
+                // Queue tool result messages for client-side tools (will be added after assistant message)
+                if (chunk.ClientTool != null)
+                {
+                    var toolResponse = new Message
+                    {
+                        Role = "tool",
+                        ToolCallId = chunk.ClientTool.ToolId,
+                        Content = $"Client-side tool '{chunk.ClientTool.ToolName}' invoked with arguments: {chunk.ClientTool.Arguments}"
+                    };
+
+                    // If assistant message already added, add immediately; otherwise queue it
+                    if (currentMessageAdded)
+                    {
+                        messages.Add(toolResponse);
+                    }
+                    else
+                    {
+                        pendingClientToolResponses.Add(toolResponse);
+                    }
                 }
 
                 foreach (var sseEvent in events)
