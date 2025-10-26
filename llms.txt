@@ -27,9 +27,9 @@ using OpenRouter.NET.Tools;    // [ToolMethod], [ToolParameter] attributes
                                // AND RegisterTool extension methods
 ---
 
-EVENT-BASED TOOL HANDLING (required if using ProcessMessageAsync):
+STREAMING (optional, for streaming extensions):
 ---
-using OpenRouter.NET.Events;   // StreamEventType, StreamEventArgs
+using OpenRouter.NET.Streaming; // StreamChunk and related types
 ---
 
 ARTIFACT SUPPORT (optional, for artifact helpers):
@@ -164,13 +164,6 @@ GetGenerationAsync(generationId, cancellationToken)
 - Returns: Task<GenerationInfo>
 - Note: Requires the generation ID returned in responses
 
-ProcessMessageAsync(request, maxToolCalls, cancellationToken)
-- Purpose: High-level method that handles tool calling loops with events
-- Returns: Task<(ChatCompletionResponse, List<Message>)>
-- Raises StreamEventArgs events: StateChange, TextContent, ToolCall, ToolResult, Error
-- Auto-loops for tool calls up to maxToolCalls iterations
-- Fires OnStreamEvent event for each state change
-
 1.3 RESOURCE MANAGEMENT
 -----------------------
 
@@ -243,25 +236,6 @@ SOLUTION: Use GetContent() extension method:
 
 ---
 var content = response.GetContent();  // Returns string? safely
----
-
-ISSUE: ProcessMessageAsync events not firing
----------------------------------------------
-CAUSE: Not subscribed to OnStreamEvent before calling ProcessMessageAsync
-SOLUTION: Subscribe to event handler first:
-
----
-client.OnStreamEvent += (sender, e) => { /* handle events */ };
-var (response, history) = await client.ProcessMessageAsync(request, maxToolCalls: 5);
----
-
-ISSUE: Compilation error "OpenRouter.NET.Events not found"
------------------------------------------------------------
-CAUSE: Missing namespace for event-based tool handling
-SOLUTION: Add using statement:
-
----
-using OpenRouter.NET.Events;
 ---
 
 ================================================================================
@@ -866,11 +840,10 @@ client
     .RegisterTool(calculator, "Divide");
 ---
 
-**CRITICAL: StreamAsync vs ProcessMessageAsync with Tools**
+**Using StreamAsync with Tools**
 
-For AUTO-EXECUTE tools with streaming, you have TWO options:
+For AUTO-EXECUTE tools with streaming, use StreamAsync with tool execution visible in chunks:
 
-OPTION 1: Use StreamAsync (tool execution visible in chunks):
 ---
 var request = new ChatCompletionRequest
 {
@@ -902,45 +875,6 @@ await foreach (var chunk in client.StreamAsync(request))
     }
 }
 ---
-
-OPTION 2: Use ProcessMessageAsync with events (cleaner event-driven approach):
----
-using OpenRouter.NET.Events;  // ← REQUIRED for event types
-
-// Subscribe to streaming events
-client.OnStreamEvent += (sender, e) =>
-{
-    switch (e.EventType)
-    {
-        case StreamEventType.ToolCall:
-            Console.WriteLine($"Calling: {e.ToolName}");
-            break;
-        case StreamEventType.ToolResult:
-            Console.WriteLine($"Result: {e.ToolResult}");
-            break;
-        case StreamEventType.TextContent:
-            Console.Write(e.TextDelta);
-            break;
-        case StreamEventType.Error:
-            Console.WriteLine($"Error: {e.ToolResult}");
-            break;
-    }
-};
-
-var request = new ChatCompletionRequest
-{
-    Model = "openai/gpt-4o",
-    Messages = new List<Message> { Message.FromUser("Add 5 and 3") },
-    Stream = true  // Enable streaming
-};
-
-var (response, history) = await client.ProcessMessageAsync(request, maxToolCalls: 5);
-Console.WriteLine($"\nFinal response: {response.GetContent()}");
----
-
-Which to use:
-- StreamAsync: More granular control, handle chunks manually
-- ProcessMessageAsync: Higher-level, event-driven, cleaner for complex tool loops
 
 4.2 CLIENT-SIDE TOOLS (MANUAL HANDLING)
 ----------------------------------------
@@ -1033,72 +967,7 @@ StreamChunk ServerToolCall structure:
 - Error (string?): Error message if Error state
 - ExecutionTime (TimeSpan?): How long tool took to run
 
-4.4 PROCESSING WITH EVENT CALLBACKS
--------------------------------------
-
-Use ProcessMessageAsync for event-driven tool handling:
-
----
-var request = new ChatCompletionRequest
-{
-    Model = "openai/gpt-4o",
-    Messages = new List<Message> { Message.FromUser("Add 10 + 5") },
-    Stream = true
-};
-
-client.OnStreamEvent += (sender, e) =>
-{
-    switch (e.EventType)
-    {
-        case StreamEventType.StateChange:
-            Console.WriteLine($"State: {e.State}");
-            break;
-        case StreamEventType.TextContent:
-            Console.Write(e.TextDelta);
-            break;
-        case StreamEventType.ToolCall:
-            Console.WriteLine($"Calling tool: {e.ToolName}");
-            break;
-        case StreamEventType.ToolResult:
-            Console.WriteLine($"Tool result: {e.ToolResult}");
-            break;
-        case StreamEventType.Error:
-            Console.WriteLine($"Error: {e.ToolResult}");
-            break;
-    }
-};
-
-var (response, history) = await client.ProcessMessageAsync(
-    request,
-    maxToolCalls: 5);
-
-Console.WriteLine($"Final response: {response.GetContent()}");
-Console.WriteLine($"Conversation history: {history.Count} messages");
----
-
-StreamEventArgs properties:
-- EventType: Type of event (StateChange, TextContent, ToolCall, ToolResult, Error)
-- State: Current state (Loading, Text, ToolCall, Complete)
-- ToolName: Name of tool (if tool-related event)
-- TextDelta: Text content (if TextContent event)
-- ToolCall: Full ToolCall object (if tool-related)
-- ToolResult: Result or error message (if tool result/error)
-- OriginalResponse: Raw API response
-
-StreamEventType enum:
-- StateChange: State machine changed
-- TextContent: Text received
-- ToolCall: Tool invoked
-- ToolResult: Tool completed
-- Error: Error occurred
-
-StreamState enum:
-- Loading: Waiting for response
-- Text: Receiving text
-- ToolCall: Executing tool
-- Complete: Finished
-
-4.5 COMPLETE WEB API EXAMPLE WITH TOOLS
+4.4 COMPLETE WEB API EXAMPLE WITH TOOLS
 ----------------------------------------
 
 ASP.NET Core controller with tool calling:
@@ -1221,7 +1090,7 @@ builder.Services.AddSingleton(sp =>
 });
 ---
 
-4.6 STREAMING ENDPOINTS WITH SERVER-SENT EVENTS (SSE)
+4.5 STREAMING ENDPOINTS WITH SERVER-SENT EVENTS (SSE)
 ------------------------------------------------------
 
 For streaming responses in web APIs, use Server-Sent Events format:
