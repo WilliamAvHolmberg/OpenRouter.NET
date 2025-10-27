@@ -14,15 +14,17 @@ interface UseModelsReturn {
   error: Error | null;
 }
 
-export function useOpenRouterModels(baseUrl: string): UseModelsReturn {
+export function useOpenRouterModels(modelsEndpoint: string): UseModelsReturn {
   const [models, setModels] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Memoize client creation to prevent unnecessary recreations
+  // Create a minimal client just for the getModels call
   const client = useMemo(() => {
-    return new OpenRouterClient(baseUrl);
-  }, [baseUrl]);
+    return new OpenRouterClient({
+      stream: '', // Not used for models fetching
+    });
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -33,7 +35,7 @@ export function useOpenRouterModels(baseUrl: string): UseModelsReturn {
         setLoading(true);
         setError(null);
 
-        const data = await client.getModels(abortController.signal);
+        const data = await client.getModels(modelsEndpoint, abortController.signal);
 
         // Only update state if component is still mounted and not aborted
         if (isMounted && !abortController.signal.aborted) {
@@ -63,7 +65,7 @@ export function useOpenRouterModels(baseUrl: string): UseModelsReturn {
       isMounted = false;
       abortController.abort();
     };
-  }, [client]);
+  }, [client, modelsEndpoint]);
 
   return { models, loading, error };
 }
