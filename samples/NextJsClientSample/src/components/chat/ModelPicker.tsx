@@ -6,7 +6,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { Model } from '@openrouter-dotnet/react';
+
+type Model = { id: string; name: string };
 
 interface ModelPickerProps {
   models: Model[];

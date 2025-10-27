@@ -6,8 +6,9 @@
 'use client';
 
 import { useRef, forwardRef, useImperativeHandle } from 'react';
-import type { Model } from '@openrouter-dotnet/react';
 import { ModelPicker } from './ModelPicker';
+
+type Model = { id: string; name: string };
 
 interface ChatInputProps {
   value: string;

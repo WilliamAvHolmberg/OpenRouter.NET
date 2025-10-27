@@ -5,8 +5,9 @@
 
 'use client';
 
-import type { Model } from '@openrouter-dotnet/react';
 import { ChatInput } from './ChatInput';
+
+type Model = { id: string; name: string };
 
 interface HeroProps {
   input: string;
