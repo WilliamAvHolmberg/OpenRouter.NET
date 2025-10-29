@@ -12,9 +12,15 @@ public static class ArtifactRequestExtensions
         var instructions = @"You have the ability to create artifacts when providing code, documents, or other deliverables to the user.
 
 When creating artifacts, wrap them in tags like this:
-<artifact type=""code"" title=""filename.ext"" language=""typescript"">
+<artifact id=""unique-id-abc12"" type=""code"" title=""filename.ext"" language=""typescript"">
 your content here
 </artifact>
+
+ARTIFACT ID GUIDELINES (OPTIONAL BUT RECOMMENDED):
+- Include an 'id' attribute in the <artifact> tag for better tracking and reference
+- Make IDs descriptive and unique (e.g., ""widget-chart-x7k9m"", ""script-parser-r4t2y"")
+- Use lowercase, hyphens, and add random characters for uniqueness
+- If using client-side tools that reference artifacts, the ID is REQUIRED
 
 CRITICAL ARTIFACT RULES:
 
@@ -108,6 +114,12 @@ Available artifact types:
         baseInstructions += @"
 CRITICAL: You MUST use the exact XML format below. Always include BOTH opening and closing tags.
 
+ARTIFACT ID GUIDELINES (OPTIONAL BUT RECOMMENDED):
+- Include an 'id' attribute in the <artifact> tag for better tracking and reference
+- Make IDs descriptive and unique (e.g., ""widget-chart-x7k9m"", ""script-parser-r4t2y"")
+- Use lowercase, hyphens, and add random characters for uniqueness
+- If using client-side tools that reference artifacts, the ID is REQUIRED
+
 ";
 
         var instructionsByType = artifactDefinitions
@@ -121,14 +133,14 @@ CRITICAL: You MUST use the exact XML format below. Always include BOTH opening a
             if (hasLanguages)
             {
                 baseInstructions += $"For {typeGroup.Key} content:\n";
-                baseInstructions += $"<artifact type=\"{typeGroup.Key}\" title=\"filename\" language=\"<language>\">\n";
+                baseInstructions += $"<artifact id=\"unique-id-abc12\" type=\"{typeGroup.Key}\" title=\"filename\" language=\"<language>\">\n";
                 baseInstructions += "your content here\n";
                 baseInstructions += "</artifact>\n";
             }
             else
             {
                 baseInstructions += $"For {typeGroup.Key} content:\n";
-                baseInstructions += $"<artifact type=\"{typeGroup.Key}\" title=\"title\">\n";
+                baseInstructions += $"<artifact id=\"unique-id-abc12\" type=\"{typeGroup.Key}\" title=\"title\">\n";
                 baseInstructions += "your content here\n";
                 baseInstructions += "</artifact>\n";
             }

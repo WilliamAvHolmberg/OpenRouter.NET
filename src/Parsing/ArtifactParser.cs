@@ -19,26 +19,30 @@ public class ArtifactParser
     public ParseResult Parse(string input)
     {
         var result = new ParseResult();
-        var regex = new Regex(@"<artifact\s+type=""([^""]+)""\s+title=""([^""]+)""(?:\s+language=""([^""]+)"")?\s*>(.*?)</artifact>", RegexOptions.Singleline);
-        
+        // Updated regex to optionally match id attribute
+        var regex = new Regex(@"<artifact(?:\s+id=""([^""]+)"")?(?:\s+type=""([^""]+)"")?(?:\s+title=""([^""]+)"")?(?:\s+language=""([^""]+)"")?\s*>(.*?)</artifact>", RegexOptions.Singleline);
+
         var matches = regex.Matches(input);
         var textWithoutArtifacts = input;
-        
+
         foreach (Match match in matches)
         {
             var artifact = new Artifact
             {
-                Id = $"art_{Guid.NewGuid().ToString("N")[..8]}",
-                Type = match.Groups[1].Value,
-                Title = match.Groups[2].Value,
-                Language = match.Groups[3].Success ? match.Groups[3].Value : null,
-                Content = match.Groups[4].Value
+                // Use LLM-provided ID if exists, otherwise generate one
+                Id = match.Groups[1].Success && !string.IsNullOrWhiteSpace(match.Groups[1].Value)
+                    ? match.Groups[1].Value
+                    : $"art_{Guid.NewGuid().ToString("N")[..8]}",
+                Type = match.Groups[2].Success ? match.Groups[2].Value : "code",
+                Title = match.Groups[3].Success ? match.Groups[3].Value : "Untitled",
+                Language = match.Groups[4].Success ? match.Groups[4].Value : null,
+                Content = match.Groups[5].Value
             };
-            
+
             result.Artifacts.Add(artifact);
             textWithoutArtifacts = textWithoutArtifacts.Replace(match.Value, "");
         }
-        
+
         result.TextWithoutArtifacts = textWithoutArtifacts;
         return result;
     }
@@ -190,11 +194,15 @@ public class ArtifactParser
     
     private void ParseOpeningTag(string tag)
     {
+        var idMatch = Regex.Match(tag, @"id=""([^""]+)""");
         var typeMatch = Regex.Match(tag, @"type=""([^""]+)""");
         var titleMatch = Regex.Match(tag, @"title=""([^""]+)""");
         var languageMatch = Regex.Match(tag, @"language=""([^""]+)""");
-        
-        _currentArtifactId = $"art_{++_artifactCounter}";
+
+        // Use LLM-provided ID if exists, otherwise generate sequential ID
+        _currentArtifactId = idMatch.Success && !string.IsNullOrWhiteSpace(idMatch.Groups[1].Value)
+            ? idMatch.Groups[1].Value
+            : $"art_{++_artifactCounter}";
         _currentType = typeMatch.Success ? typeMatch.Groups[1].Value : "unknown";
         _currentTitle = titleMatch.Success ? titleMatch.Groups[1].Value : "untitled";
         _currentLanguage = languageMatch.Success ? languageMatch.Groups[1].Value : null;
