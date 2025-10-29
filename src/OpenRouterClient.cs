@@ -494,7 +494,6 @@ public class OpenRouterClient
         System.Diagnostics.Stopwatch? stopwatch = null;
         var chunkIndex = 0;
         var isFirstChunk = true;
-        var completionSent = false;
         var artifactParser = new Parsing.ArtifactParser();
 
         string? line;
@@ -598,7 +597,6 @@ public class OpenRouterClient
                                     Id = rawChunk.Id
                                 }
                             };
-                            completionSent = true;
                         }
                         
                         chunksToYield.Add(textChunk);
@@ -643,7 +641,6 @@ public class OpenRouterClient
                             },
                             Raw = rawChunk
                         });
-                        completionSent = true;
                     }
                     else if (delta?.ToolCalls == null || delta.ToolCalls.Length == 0)
                     {
