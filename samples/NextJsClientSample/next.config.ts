@@ -2,21 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   compress: false,
-  rewrites: async () => {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:5282/api/:path*',
-      },
-    ];
-  },
-  turbopack: {
-    resolveAlias: {
-      'fs': './empty-module.ts',
-      'path': './empty-module.ts',
-      'crypto': './empty-module.ts',
-    },
-  },
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -27,6 +12,14 @@ const nextConfig: NextConfig = {
       };
     }
     return config;
+  },
+  rewrites: async () => {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:5282/api/:path*',
+      },
+    ];
   },
 };
 

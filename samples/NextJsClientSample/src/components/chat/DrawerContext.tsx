@@ -46,7 +46,6 @@ export function DrawerProvider({ children }: { children: ReactNode }) {
 
 export function useDrawer() {
   const ctx = useContext(DrawerContext);
-  if (!ctx) throw new Error('useDrawer must be used within DrawerProvider');
   return ctx;
 }
 

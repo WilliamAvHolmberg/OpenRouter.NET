@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useOpenRouterChat, ToolClientEvent } from '@openrouter-dotnet/react';
+import { useState, useRef, useEffect } from 'react';
+import { useOpenRouterChat, useOpenRouterModels, ToolClientEvent, ArtifactBlock } from '@openrouter-dotnet/react';
 import { MessageList } from '../chat/MessageList';
 import { ChatInput } from '../chat/ChatInput';
 import type { DashboardWidgetData } from './DashboardWidget';
@@ -14,92 +14,6 @@ interface DashboardAssistantProps {
   onUpdateWidget: (id: string, updates: Partial<DashboardWidgetData>) => void;
 }
 
-const SYSTEM_PROMPT = `You are a dashboard builder assistant. You help users create data visualizations from a SQLite database containing e-commerce data.
-
-**Database Schema:**
-- orders: id, customer_id, product_id, amount, quantity, status ('completed'|'pending'|'cancelled'), created_at, delivered_at
-- customers: id, name, segment ('enterprise'|'smb'|'individual'), country, lifetime_value
-- products: id, name, category, price, cost
-
-**How to create widgets:**
-
-1. Generate an artifact with language "tsx.reactrunner" containing BOTH the SQL query and React component:
-   - Define SQL as a const at the top: \`const SQL_QUERY = \\\`SELECT ...\\\`;\`
-   - Create component that uses \`useDatabase()\` hook or \`db\` directly
-   - Component executes SQL in useEffect and sets state
-   - Component renders visualization with the data
-
-2. Then use add_widget_to_dashboard tool to add it to the canvas
-
-**Available in component scope:**
-- Database: \`useDatabase()\` hook returns db, or use \`db\` directly
-- Execute queries: \`db.exec(SQL_QUERY)\` returns array of results
-- Parse results: \`result[0]?.values\` gives you rows as arrays, map to objects
-- All Recharts components: BarChart, LineChart, PieChart, AreaChart, RadarChart, etc.
-- ResponsiveContainer: ALWAYS wrap charts in this for responsive sizing
-- COLORS array: Pre-defined color palette for consistent charts
-- All React hooks: useState, useEffect, useMemo, etc.
-- Tailwind CSS for styling
-
-**Widget patterns:**
-
-Metric Card:
-\`\`\`
-const SQL = \\\`SELECT COUNT(*) as total FROM orders\\\`;
-function Widget() {
-  const db = useDatabase();
-  const [value, setValue] = useState(0);
-  useEffect(() => {
-    if (!db) return;
-    const result = db.exec(SQL);
-    setValue(result[0]?.values[0]?.[0] || 0);
-  }, []);
-  return (
-    <div className="text-center p-8">
-      <div className="text-4xl font-bold text-blue-600">{value}</div>
-      <div className="text-sm text-slate-500 mt-2">Total Orders</div>
-    </div>
-  );
-}
-\`\`\`
-
-Chart Widget:
-\`\`\`
-const SQL = \\\`SELECT category, COUNT(*) as count FROM products GROUP BY category\\\`;
-function Widget() {
-  const db = useDatabase();
-  const [data, setData] = useState([]);
-  useEffect(() => {
-    if (!db) return;
-    const result = db.exec(SQL);
-    const rows = result[0]?.values.map(([category, count]) => ({ category, count })) || [];
-    setData(rows);
-  }, []);
-  return (
-    <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={data}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="category" />
-        <YAxis />
-        <Tooltip />
-        <Bar dataKey="count" fill={COLORS[0]} />
-      </BarChart>
-    </ResponsiveContainer>
-  );
-}
-\`\`\`
-
-**Widget sizes:**
-- "small" - Use for metric cards
-- "medium" - Default, use for standard charts
-- "large" - Use for tables or complex visualizations (spans 2 columns)
-
-**Important:**
-- Always handle null/undefined database gracefully
-- Always handle empty data results
-- Keep components simple and focused
-- Use COLORS array for consistent styling`;
-
 export function DashboardAssistant({
   selectedModel,
   onModelChange,
@@ -108,38 +22,74 @@ export function DashboardAssistant({
   onUpdateWidget
 }: DashboardAssistantProps) {
   const [input, setInput] = useState('');
+  // Track artifacts by ID in a Map for easy lookup
+  const artifactsMapRef = useRef<Map<string, ArtifactBlock>>(new Map());
 
   const { state, actions } = useOpenRouterChat({
-    baseUrl: '/api',
+    endpoints: {
+      stream: '/api/dashboard/stream',
+      clearConversation: '/api/dashboard/conversation',
+    },
     defaultModel: selectedModel,
-    systemPrompt: SYSTEM_PROMPT,
     config: { 
       debug: true,
-      temperature: 0.7
+      temperature: 0.3
     },
     onClientTool: (event: ToolClientEvent) => {
       try {
+        console.log('🔧 [DASHBOARD TOOL] Tool called:', event.toolName);
+        console.log('🔧 [DASHBOARD TOOL] Arguments:', event.arguments);
+        console.log('📦 [DASHBOARD TOOL] Available artifacts:', Array.from(artifactsMapRef.current.keys()));
+
         const args = JSON.parse(event.arguments);
 
         if (event.toolName === 'add_widget_to_dashboard') {
-          const { widgetId, title, code, size = 'medium' } = args;
+          const { artifactId, widgetId, title, size = 'medium' } = args;
+
+          console.log('📊 [DASHBOARD TOOL] Adding widget:', { artifactId, widgetId, title, size });
+
+          // Look up the artifact by ID
+          const artifact = artifactsMapRef.current.get(artifactId);
+
+          console.log('📦 [DASHBOARD TOOL] Found artifact:', artifact);
+
+          if (!artifact) {
+            console.error('❌ [DASHBOARD TOOL] Artifact not found with ID:', artifactId);
+            return {
+              success: false,
+              message: `Artifact with ID "${artifactId}" not found. Available IDs: ${Array.from(artifactsMapRef.current.keys()).join(', ')}`
+            };
+          }
+
+          if (artifact.isStreaming) {
+            console.warn('⚠️ [DASHBOARD TOOL] Artifact is still streaming');
+            return {
+              success: false,
+              message: `Artifact "${artifactId}" is still being generated. Please wait for it to complete.`
+            };
+          }
+
+          console.log('✅ [DASHBOARD TOOL] Using artifact code, length:', artifact.content.length);
+
           onAddWidget({
             id: widgetId,
             title,
-            code,
+            code: artifact.content,
             size
           });
-          return { 
-            success: true, 
-            message: `Widget "${title}" added to dashboard` 
+
+          console.log('✅ [DASHBOARD TOOL] Widget added successfully!');
+
+          return {
+            success: true,
+            message: `Widget "${title}" added to dashboard using artifact "${artifactId}"`
           };
         }
 
         if (event.toolName === 'update_widget') {
-          const { widgetId, title, code } = args;
+          const { widgetId, title } = args;
           const updates: Partial<DashboardWidgetData> = {};
           if (title) updates.title = title;
-          if (code) updates.code = code;
           onUpdateWidget(widgetId, updates);
           return { 
             success: true, 
@@ -164,6 +114,49 @@ export function DashboardAssistant({
     },
   } as any);
 
+  const { models } = useOpenRouterModels('/api/models');
+
+  // Track artifacts from messages and update the Map
+  useEffect(() => {
+    console.log('🔄 [ARTIFACT TRACKER] Messages updated:', state.messages.length);
+    console.log('🔄 [ARTIFACT TRACKER] Current message:', state.currentMessage);
+
+    // Build a new Map of all tsx.reactrunner artifacts
+    const newArtifactsMap = new Map<string, ArtifactBlock>();
+
+    state.messages.forEach(msg => {
+      if (msg.role === 'assistant') {
+        const artifacts = msg.blocks.filter((block): block is ArtifactBlock =>
+          block.type === 'artifact' &&
+          block.language === 'tsx.reactrunner'
+        );
+        artifacts.forEach(artifact => {
+          newArtifactsMap.set(artifact.artifactId, artifact);
+        });
+      }
+    });
+
+    // Also check current message (may include streaming artifacts)
+    if (state.currentMessage) {
+      const currentArtifacts = state.currentMessage.blocks.filter((block): block is ArtifactBlock =>
+        block.type === 'artifact' &&
+        block.language === 'tsx.reactrunner'
+      );
+      currentArtifacts.forEach(artifact => {
+        newArtifactsMap.set(artifact.artifactId, artifact);
+      });
+    }
+
+    console.log('📦 [ARTIFACT TRACKER] Found artifacts:', Array.from(newArtifactsMap.entries()).map(([id, a]) => ({
+      id,
+      title: a.title,
+      isStreaming: a.isStreaming,
+      contentLength: a.content.length
+    })));
+
+    artifactsMapRef.current = newArtifactsMap;
+  }, [state.messages, state.currentMessage]);
+
   const handleSend = async () => {
     if (!input.trim() || state.isStreaming) return;
     await (actions.sendMessage as any)(input, { model: selectedModel });
@@ -178,7 +171,7 @@ export function DashboardAssistant({
       </div>
 
       <div className="flex-1 overflow-hidden min-h-0">
-        <MessageList messages={state.messages} error={state.error} lastMessageMinHeight="55vh" />
+        <MessageList messages={state.messages} error={state.error} lastMessageMinHeight="40vh" />
       </div>
 
       <div className="flex-shrink-0 p-4 border-t border-slate-200">
@@ -187,7 +180,7 @@ export function DashboardAssistant({
           onChange={setInput}
           onSend={handleSend}
           isStreaming={state.isStreaming}
-          models={[]}
+          models={models}
           selectedModel={selectedModel}
           onModelChange={onModelChange}
           variant="inline"

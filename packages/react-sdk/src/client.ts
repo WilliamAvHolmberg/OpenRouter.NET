@@ -42,6 +42,7 @@ export class OpenRouterClient {
   async getModels(modelsEndpoint: string, signal?: AbortSignal): Promise<Model[]> {
     const response = await fetch(modelsEndpoint, {
       signal,
+      credentials: this.config.includeCredentials ? 'include' : 'same-origin',
     });
 
     if (!response.ok) {
@@ -61,6 +62,7 @@ export class OpenRouterClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      credentials: this.config.includeCredentials ? 'include' : 'same-origin',
     });
 
     if (!response.ok) {
@@ -176,6 +178,7 @@ export class OpenRouterClient {
     
     const response = await fetch(`${this.endpoints.clearConversation}/${conversationId}`, {
       method: 'DELETE',
+      credentials: this.config.includeCredentials ? 'include' : 'same-origin',
     });
 
     if (!response.ok) {

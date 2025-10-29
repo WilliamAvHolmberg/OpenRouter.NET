@@ -237,6 +237,8 @@ export interface ClientConfig {
   onRawLine?: (line: string) => void;
   /** Callback for parsed events (for debugging) */
   onParsedEvent?: (event: SseEvent) => void;
+  /** Include credentials (cookies) in fetch requests - set to true for cookie-based auth */
+  includeCredentials?: boolean;
 }
 
 // ============================================================================
