@@ -19,8 +19,8 @@ if [ -z "$OPENROUTER_API_KEY" ]; then
     exit 1
 fi
 
-# Default path to analyze
-TARGET_PATH="${1:-../../../src}"
+# Default path to analyze - workspace root for full context
+TARGET_PATH="${1:-../../..}"
 OUTPUT_PATH="${2:-../../../llms.txt}"
 MODEL="${3:-anthropic/claude-3.5-sonnet}"
 

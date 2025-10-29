@@ -129,20 +129,47 @@ Your llms.txt should follow this structure:
 
 # EXPLORATION STRATEGY
 
-I recommend this approach:
+**CRITICAL**: Follow this systematic approach for comprehensive documentation:
 
-1. GetDirectoryTree() to see overall structure
-2. ReadFile(""README.md"") to understand the SDK
-3. ReadFile(""*.csproj"") to see dependencies and version
-4. SearchFiles(""*.cs"") to list all source files
-5. Read main client class files
-6. Read model/request/response files
-7. Read extension method files
-8. Read any tool or helper files
-9. Look at samples if available
-10. THEN write comprehensive llms.txt
+## Phase 1: Get Context & Reference (MUST DO FIRST!)
+1. **GetDirectoryTree(""."", 3)** - Understand overall structure
+2. **ReadFile(""README.md"")** - Understand SDK purpose and features
+3. **ReadFile(""llms.txt"")** - IF IT EXISTS, read it as a REFERENCE for:
+   - Expected depth and detail level
+   - Formatting style and tone
+   - Common gotchas and issues to document
+   - What users actually need to know
+4. **ReadFile(""*.csproj"")** - Get version, dependencies, .NET requirements
+5. **GetCodebaseStats(""."")** - Understand codebase scale
 
-Take your time. Explore thoroughly. When ready, call WriteLlmsTxt with the complete documentation.
+## Phase 2: Deep Source Analysis (THOROUGH!)
+6. **SearchFiles(""*.cs"")** - List ALL source files
+7. **ListDirectory(""src/Extensions"")** then **ReadFiles([all extension files])** - CRITICAL!
+8. **ListDirectory(""src/Sse"")** then **ReadFiles([all SSE files])** - Important feature!
+9. **ReadFile(""src/OpenRouterClient.cs"")** - Main client class
+10. **ListDirectory(""src/Models"")** then **ReadFiles([key model files])**
+11. **ListDirectory(""src/Tools"")** then **ReadFiles([tool files])**
+12. Read any other critical source files
+
+## Phase 3: Real-World Usage Patterns (DON'T SKIP!)
+13. **ListDirectory(""samples"")** - See what samples exist
+14. **Read sample Program.cs files** - Real usage patterns matter!
+15. **Read sample README files** - Common use cases and setup
+
+## Phase 4: Generate Comprehensive Documentation
+16. Synthesize everything learned
+17. Compare depth with existing llms.txt (if present)
+18. **WriteLlmsTxt(content)** - Generate COMPLETE documentation
+
+**CRITICAL PRIORITIES**:
+- ✅ If llms.txt exists, READ IT FIRST to understand expected quality
+- ✅ Read ALL Extension files - they contain the most useful user-facing features
+- ✅ Read samples/ directory - shows real-world usage patterns
+- ✅ Document EVERY public method and extension method
+- ✅ Include common error messages and solutions
+- ✅ Don't stop at basics - dig deep into advanced features
+
+Take your time. Explore thoroughly. Aim for 2000+ line comprehensive documentation.
 
 # START NOW
 

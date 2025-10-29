@@ -42,19 +42,32 @@ That's it! The agent will explore your codebase and generate `llms.txt`.
 ### Basic Usage
 
 ```bash
-dotnet run -- --path <path-to-analyze>
+# Analyze entire workspace (RECOMMENDED)
+dotnet run -- --path /path/to/workspace
+
+# Or from tool directory, workspace root
+dotnet run -- --path ../../..
 ```
 
 ### Full Options
 
 ```bash
 dotnet run -- \
-  --path ./src \
-  --output ./llms.txt \
+  --path ../../.. \
+  --output ../../../llms.txt \
   --model anthropic/claude-3.5-sonnet \
   --max-iterations 30 \
   --api-key sk-or-v1-...
 ```
+
+**💡 Pro Tip**: Always point to the **workspace root**, not just `src/`.
+The agent needs access to:
+- Source code (`src/`)
+- Sample projects (`samples/`)
+- Existing documentation (`llms.txt`, `README.md`)
+- Project files (`.csproj`)
+
+The agent will explore intelligently and focus on what matters.
 
 ### Options
 

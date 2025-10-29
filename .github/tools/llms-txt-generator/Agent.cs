@@ -56,8 +56,16 @@ public class Agent
         Console.WriteLine();
 
         _conversationHistory.Add(Message.FromUser(
-            "Begin your analysis. Start by exploring the codebase structure, then read relevant files, " +
-            "and finally generate the comprehensive llms.txt documentation."));
+            "Begin your analysis. Follow this approach:\n\n" +
+            "1. FIRST: Read llms.txt if it exists to understand expected depth and style\n" +
+            "2. Explore the codebase structure (GetDirectoryTree)\n" +
+            "3. Read README.md and .csproj files\n" +
+            "4. Read ALL files in src/Extensions/ - these are critical!\n" +
+            "5. Read ALL files in src/Sse/ if it exists\n" +
+            "6. Explore samples/ directory for real-world usage\n" +
+            "7. Read other important source files\n" +
+            "8. Finally, generate comprehensive llms.txt documentation (2000+ lines)\n\n" +
+            "Take your time and be thorough. Quality over speed!"));
 
         int iteration = 0;
 

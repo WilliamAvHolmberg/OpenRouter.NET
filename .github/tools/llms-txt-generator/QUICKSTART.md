@@ -20,7 +20,7 @@ cd .github/tools/llms-txt-generator
 This will:
 - Restore dependencies
 - Build the project
-- Analyze `src/` directory
+- Analyze **entire workspace** (src/, samples/, llms.txt, README.md)
 - Generate `llms.txt` in project root
 
 ### Option B: Manual run with custom options
@@ -32,15 +32,32 @@ cd .github/tools/llms-txt-generator
 dotnet restore
 dotnet build
 
-# Run with custom path
+# Run - analyze entire workspace (RECOMMENDED)
+dotnet run -- --path ../../.. --output ../../../llms.txt
+
+# Or analyze just src/ (will miss samples and existing llms.txt)
 dotnet run -- --path ../../../src --output ../../../llms.txt
 ```
 
-### Option C: Analyze a different path
+**💡 Important**: For best results, point to the **workspace root**, not just `src/`.
+This gives the agent access to:
+- ✅ Source code (`src/`)
+- ✅ Sample projects (`samples/`)
+- ✅ Existing `llms.txt` (for reference)
+- ✅ README.md (for overview)
+- ✅ .csproj files (for dependencies)
+
+### Option C: Analyze a specific package
 
 ```bash
-# Analyze the react-sdk package instead
-./run.sh ../../../packages/react-sdk react-sdk-llms.txt
+# Analyze just the react-sdk package (will miss broader context)
+cd .github/tools/llms-txt-generator
+dotnet run -- --path ../../../packages/react-sdk --output react-sdk-llms.txt
+
+# Better: Analyze workspace but focus output on react-sdk
+# (Agent can see everything for context, but documents react-sdk)
+dotnet run -- --path ../../.. --output react-sdk-llms.txt
+# Then instruct in prompt which package to focus on
 ```
 
 ## Step 3: Watch It Work!
