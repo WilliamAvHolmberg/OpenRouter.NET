@@ -233,19 +233,85 @@ If agent continues after successful write:
 
 ---
 
+## Issue 3: Hard Crash on WriteLlmsTxt Failure ✅
+
+**Problem**: When WriteLlmsTxt failed, it was unclear what went wrong. Agent might continue or retry without fixing the underlying issue.
+
+**Solution**: Tool now **CRASHES HARD** with maximum diagnostic information.
+
+### Changes Made:
+
+#### WriteLlmsTxtTool.cs - Maximum Diagnostics
+```csharp
+// Collects full diagnostic info before attempting write
+var diagnosticInfo = new StringBuilder();
+diagnosticInfo.AppendLine("Output path: {_outputPath}");
+diagnosticInfo.AppendLine("Content length: {content?.Length}");
+diagnosticInfo.AppendLine("Directory exists: {Directory.Exists(outputDir)}");
+// ... and much more
+
+// On ANY failure, dumps complete diagnostic
+Console.WriteLine(diagnosticInfo.ToString());
+
+// Saves error log
+File.WriteAllText("llms-txt-error.log", fullDiagnostic);
+
+// RE-THROWS exception (crashes app)
+throw new Exception($"WriteLlmsTxt FAILED!\n\n{fullDiagnostic}", ex);
+```
+
+#### What Gets Logged:
+- ✅ Output path and directory status
+- ✅ Content length and line count
+- ✅ Current directory
+- ✅ Validation failure details
+- ✅ Content preview (first 1000 chars)
+- ✅ Full exception stack trace
+- ✅ Inner exception details
+- ✅ Environment info (OS, User, .NET version)
+- ✅ Saved to `llms-txt-error.log`
+
+#### Agent.cs - Crash Context
+```csharp
+catch (Exception ex)
+{
+    Console.WriteLine("💥 FATAL ERROR DURING AGENT EXECUTION");
+    // Dumps full context:
+    // - Iteration number
+    // - Files read count
+    // - Last 5 tool calls
+    // - Full stack trace
+    
+    throw; // Re-throw to crash
+}
+```
+
+#### Benefits:
+- ✅ **NO SILENT FAILURES** - App crashes immediately
+- ✅ **FULL DIAGNOSTICS** - See exactly what went wrong
+- ✅ **ERROR LOG SAVED** - Review later if needed
+- ✅ **CONTENT PREVIEW** - See what was attempted
+- ✅ **EASY DEBUGGING** - All info in one place
+
+See [CRASH-DIAGNOSTICS.md](CRASH-DIAGNOSTICS.md) for full details.
+
+---
+
 ## Summary of Changes
 
 | File | Changes |
 |------|---------|
 | `SystemPrompt.cs` | Clarified focus on OpenRouter.NET SDK, updated exploration strategy |
-| `Agent.cs` | Added initial instructions, WriteLlmsTxt special handling, stuck detection |
-| `WriteLlmsTxtTool.cs` | Much clearer success/error messages, better validation, explicit STOP signals |
+| `Agent.cs` | Added initial instructions, WriteLlmsTxt special handling, stuck detection, crash diagnostics |
+| `WriteLlmsTxtTool.cs` | Much clearer success/error messages, better validation, explicit STOP signals, **HARD CRASH with full diagnostics** |
 | `QUICKSTART.md` | Updated to recommend workspace root, explain what agent can access |
 | `README.md` | Updated usage examples to use workspace root |
 | `run.sh` | Changed default from `src/` to `../../..` (workspace root) |
+| `CRASH-DIAGNOSTICS.md` | **NEW** - Complete guide to crash behavior and debugging |
 
 All changes focused on:
 1. ✅ Clarity - Agent knows exactly what to document
 2. ✅ Thoroughness - Agent explores all necessary files
 3. ✅ Completion - Agent knows when to stop
 4. ✅ Debugging - Clear output for troubleshooting
+5. ✅ **FAIL LOUD** - Immediate crash with full diagnostic info

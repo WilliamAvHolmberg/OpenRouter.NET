@@ -168,8 +168,39 @@ public class Agent
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"\n\n❌ Error during streaming: {ex.Message}");
-                return false;
+                Console.WriteLine("\n\n" + "=".PadRight(70, '='));
+                Console.WriteLine("💥 FATAL ERROR DURING AGENT EXECUTION");
+                Console.WriteLine("=".PadRight(70, '='));
+                Console.WriteLine($"Exception Type: {ex.GetType().Name}");
+                Console.WriteLine($"Message: {ex.Message}");
+                Console.WriteLine($"\nStack Trace:");
+                Console.WriteLine(ex.StackTrace ?? "(no stack trace)");
+                
+                if (ex.InnerException != null)
+                {
+                    Console.WriteLine($"\nInner Exception: {ex.InnerException.GetType().Name}");
+                    Console.WriteLine($"Inner Message: {ex.InnerException.Message}");
+                    Console.WriteLine($"Inner Stack Trace:");
+                    Console.WriteLine(ex.InnerException.StackTrace ?? "(no stack trace)");
+                }
+                
+                Console.WriteLine("\nCONTEXT:");
+                Console.WriteLine($"Iteration: {iteration}/{_maxIterations}");
+                Console.WriteLine($"Model: {_model}");
+                Console.WriteLine($"Files read so far: {_fileTools.GetReadFiles().Count()}");
+                Console.WriteLine($"Has written llms.txt: {_writeTool.HasWritten}");
+                Console.WriteLine($"Conversation messages: {_conversationHistory.Count}");
+                
+                Console.WriteLine("\nLAST TOOL CALLS:");
+                foreach (var (name, result) in toolCalls.TakeLast(5))
+                {
+                    Console.WriteLine($"  - {name}: {TruncateForDisplay(result, 100)}");
+                }
+                
+                Console.WriteLine("\n" + "=".PadRight(70, '='));
+                
+                // Re-throw to crash the application
+                throw;
             }
 
             var responseText = response.ToString();
