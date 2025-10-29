@@ -6,6 +6,10 @@ namespace OpenRouter.NET.Parsing;
 
 public class ArtifactParser
 {
+    private static readonly Regex ArtifactRegex = new(
+        @"<artifact\b(?<attrs>[^>]*)>(?<content>.*?)</artifact>",
+        RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase);
+    
     private readonly StringBuilder _buffer = new();
     private ParserState _state = ParserState.Normal;
     private string? _currentArtifactId;
@@ -16,23 +20,35 @@ public class ArtifactParser
     private int _artifactCounter = 0;
     private const string ClosingTag = "</artifact>";
     
+    private static string? ExtractAttribute(string attributesString, string attributeName)
+    {
+        var match = Regex.Match(attributesString, 
+            $@"\b{attributeName}\s*=\s*""([^""]*)""", 
+            RegexOptions.IgnoreCase);
+        return match.Success ? match.Groups[1].Value : null;
+    }
+    
     public ParseResult Parse(string input)
     {
         var result = new ParseResult();
-        var regex = new Regex(@"<artifact\s+type=""([^""]+)""\s+title=""([^""]+)""(?:\s+language=""([^""]+)"")?\s*>(.*?)</artifact>", RegexOptions.Singleline);
-        
-        var matches = regex.Matches(input);
+        var matches = ArtifactRegex.Matches(input);
         var textWithoutArtifacts = input;
         
         foreach (Match match in matches)
         {
+            var attrs = match.Groups["attrs"].Value;
+            var id = ExtractAttribute(attrs, "id");
+            var type = ExtractAttribute(attrs, "type") ?? "code";
+            var title = ExtractAttribute(attrs, "title") ?? "Untitled";
+            var language = ExtractAttribute(attrs, "language");
+            
             var artifact = new Artifact
             {
-                Id = $"art_{Guid.NewGuid().ToString("N")[..8]}",
-                Type = match.Groups[1].Value,
-                Title = match.Groups[2].Value,
-                Language = match.Groups[3].Success ? match.Groups[3].Value : null,
-                Content = match.Groups[4].Value
+                Id = !string.IsNullOrWhiteSpace(id) ? id : $"art_{Guid.NewGuid().ToString("N")[..8]}",
+                Type = type,
+                Title = title,
+                Language = language,
+                Content = match.Groups["content"].Value
             };
             
             result.Artifacts.Add(artifact);
@@ -190,13 +206,16 @@ public class ArtifactParser
     
     private void ParseOpeningTag(string tag)
     {
+        var idMatch = Regex.Match(tag, @"id=""([^""]+)""");
         var typeMatch = Regex.Match(tag, @"type=""([^""]+)""");
         var titleMatch = Regex.Match(tag, @"title=""([^""]+)""");
         var languageMatch = Regex.Match(tag, @"language=""([^""]+)""");
         
-        _currentArtifactId = $"art_{++_artifactCounter}";
-        _currentType = typeMatch.Success ? typeMatch.Groups[1].Value : "unknown";
-        _currentTitle = titleMatch.Success ? titleMatch.Groups[1].Value : "untitled";
+        _currentArtifactId = idMatch.Success && !string.IsNullOrWhiteSpace(idMatch.Groups[1].Value)
+            ? idMatch.Groups[1].Value
+            : $"art_{++_artifactCounter}";
+        _currentType = typeMatch.Success ? typeMatch.Groups[1].Value : "code";
+        _currentTitle = titleMatch.Success ? titleMatch.Groups[1].Value : "Untitled";
         _currentLanguage = languageMatch.Success ? languageMatch.Groups[1].Value : null;
     }
 }

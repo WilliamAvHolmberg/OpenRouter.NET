@@ -29,14 +29,17 @@ export function ChatInterface() {
   });
 
   const { state, actions, debug } = useOpenRouterChat({
-    baseUrl: '/api',
+    endpoints: {
+      stream: '/api/stream',
+      clearConversation: '/api/conversation',
+    },
     defaultModel: selectedModel,
     config: {
       debug: true,
     },
   });
 
-  const { models, loading: modelsLoading } = useOpenRouterModels('/api');
+  const { models, loading: modelsLoading } = useOpenRouterModels('/api/models');
 
   // Save selected model to localStorage
   useEffect(() => {

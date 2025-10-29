@@ -39,6 +39,7 @@ export type {
   ChatMessage,
 
   // Config
+  EndpointConfig,
   ClientConfig,
   ChatRequest,
   EnabledArtifact,

@@ -16,6 +16,7 @@ import type {
   ChatActions,
   UseChatReturn,
   ClientConfig,
+  EndpointConfig,
   SseEvent,
   ArtifactStartedEvent,
   ArtifactCompletedEvent,
@@ -29,7 +30,7 @@ import type {
 } from '../types';
 
 interface UseChatOptions {
-  baseUrl: string;
+  endpoints: EndpointConfig;
   conversationId?: string;
   defaultModel?: string;
   config?: ClientConfig;
@@ -37,7 +38,7 @@ interface UseChatOptions {
 }
 
 export function useOpenRouterChat({
-  baseUrl,
+  endpoints,
   conversationId: initialConversationId,
   defaultModel = 'openai/gpt-4o',
   config,
@@ -64,7 +65,7 @@ export function useOpenRouterChat({
 
   // Memoize client creation to prevent unnecessary recreations
   const client = useMemo(() => {
-    return new OpenRouterClient(baseUrl, {
+    return new OpenRouterClient(endpoints, {
       ...config,
       onRawLine: (line: string) => {
         setDebugData((prev) => ({
@@ -79,7 +80,7 @@ export function useOpenRouterChat({
         }));
       },
     });
-  }, [baseUrl, config]);
+  }, [endpoints, config]);
 
   const clientRef = useRef(client);
   clientRef.current = client;

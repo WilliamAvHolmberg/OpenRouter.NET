@@ -9,7 +9,8 @@ export function Navigation() {
   const links = [
     { href: '/', label: 'Home' },
     { href: '/chat', label: 'Full Chat' },
-    { href: '/orders', label: 'Orders' }
+    { href: '/orders', label: 'Orders' },
+    { href: '/dashboard', label: 'Dashboard' }
   ];
 
   return (

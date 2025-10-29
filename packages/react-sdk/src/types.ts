@@ -220,6 +220,14 @@ export interface EnabledArtifact {
 // Client Configuration
 // ============================================================================
 
+/** Endpoint configuration for API calls */
+export interface EndpointConfig {
+  /** Endpoint for streaming chat completions */
+  stream: string;
+  /** Endpoint for clearing conversation history (optional) */
+  clearConversation?: string;
+}
+
 export interface ClientConfig {
   /** Enable debug logging */
   debug?: boolean;
@@ -229,6 +237,8 @@ export interface ClientConfig {
   onRawLine?: (line: string) => void;
   /** Callback for parsed events (for debugging) */
   onParsedEvent?: (event: SseEvent) => void;
+  /** Include credentials (cookies) in fetch requests - set to true for cookie-based auth */
+  includeCredentials?: boolean;
 }
 
 // ============================================================================

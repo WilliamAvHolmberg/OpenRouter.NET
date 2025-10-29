@@ -86,7 +86,10 @@ export default function Home() {
           <div className="p-6 bg-gray-950 overflow-x-auto">
             <pre className="text-sm text-gray-100 font-mono leading-relaxed">
               <code>{`const { state, actions } = useOpenRouterChat({
-  baseUrl: '/api',
+  endpoints: {
+    stream: '/api/stream',
+    clearConversation: '/api/conversation',
+  },
   defaultModel: 'anthropic/claude-3.5-sonnet',
 });
 

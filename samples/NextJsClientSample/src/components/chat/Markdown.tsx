@@ -22,14 +22,16 @@ export function Markdown({ children }: MarkdownProps) {
           h1: (p) => <h3 {...p} className="text-lg font-semibold text-slate-900" />,
           h2: (p) => <h4 {...p} className="text-base font-semibold text-slate-900" />,
           h3: (p) => <h5 {...p} className="text-sm font-semibold text-slate-900" />,
-          code: ({ inline, className, children, ...props }) =>
-            inline ? (
+          code: ({ className, children, ...props }: any) => {
+            const inline = !(props.node && props.node.position);
+            return inline ? (
               <code className="bg-slate-100 text-slate-800 rounded px-1.5 py-0.5" {...props}>{children}</code>
             ) : (
               <pre className="bg-slate-950 text-slate-100 p-3 rounded-lg overflow-auto">
                 <code className={className} {...props}>{children}</code>
               </pre>
-            ),
+            );
+          },
           table: (p) => <div className="overflow-x-auto"><table {...p} className="min-w-full text-sm" /></div>,
         }}
       >

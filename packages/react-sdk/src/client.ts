@@ -9,14 +9,15 @@ import type {
   ChatRequest,
   Model,
   ClientConfig,
+  EndpointConfig,
 } from './types.ts';
 
 export class OpenRouterClient {
-  public baseUrl: string;
+  public endpoints: EndpointConfig;
   private config: ClientConfig;
 
-  constructor(baseUrl: string, config: ClientConfig = {}) {
-    this.baseUrl = baseUrl;
+  constructor(endpoints: EndpointConfig, config: ClientConfig = {}) {
+    this.endpoints = endpoints;
     this.config = { debug: false, ...config };
   }
 
@@ -38,9 +39,10 @@ export class OpenRouterClient {
   /**
    * Get available models
    */
-  async getModels(signal?: AbortSignal): Promise<Model[]> {
-    const response = await fetch(`${this.baseUrl}/models`, {
+  async getModels(modelsEndpoint: string, signal?: AbortSignal): Promise<Model[]> {
+    const response = await fetch(modelsEndpoint, {
       signal,
+      credentials: this.config.includeCredentials ? 'include' : 'same-origin',
     });
 
     if (!response.ok) {
@@ -56,10 +58,11 @@ export class OpenRouterClient {
   async stream(request: ChatRequest, options: StreamOptions = {}): Promise<void> {
     this.log('info', 'Starting stream', request);
 
-    const response = await fetch(`${this.baseUrl}/stream`, {
+    const response = await fetch(this.endpoints.stream, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+      credentials: this.config.includeCredentials ? 'include' : 'same-origin',
     });
 
     if (!response.ok) {
@@ -169,8 +172,13 @@ export class OpenRouterClient {
    * Clear a conversation
    */
   async clearConversation(conversationId: string): Promise<void> {
-    const response = await fetch(`${this.baseUrl}/conversation/${conversationId}`, {
+    if (!this.endpoints.clearConversation) {
+      throw new Error('clearConversation endpoint not configured');
+    }
+    
+    const response = await fetch(`${this.endpoints.clearConversation}/${conversationId}`, {
       method: 'DELETE',
+      credentials: this.config.includeCredentials ? 'include' : 'same-origin',
     });
 
     if (!response.ok) {

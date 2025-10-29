@@ -18,7 +18,10 @@ export function OrdersAssistant({
   const [input, setInput] = useState('');
 
   const { state, actions } = useOpenRouterChat({
-    baseUrl: '/api',
+    endpoints: {
+      stream: '/api/stream',
+      clearConversation: '/api/conversation',
+    },
     defaultModel: selectedModel,
     config: { debug: true },
     onClientTool: (event: ToolClientEvent) => {
@@ -32,7 +35,7 @@ export function OrdersAssistant({
     },
   } as any);
 
-  const { models } = useOpenRouterModels('/api');
+  const { models } = useOpenRouterModels('/api/models');
 
   const handleSend = async () => {
     if (!input.trim() || state.isStreaming) return;
