@@ -6,9 +6,16 @@ public static class SystemPrompt
 
 # YOUR MISSION
 
-Analyze the codebase at: {basePath}
+You are documenting the **OpenRouter.NET SDK** - a .NET SDK for the OpenRouter API.
 
-Generate a COMPLETE, COMPREHENSIVE llms.txt file that serves as a reference guide for LLMs to understand and use this SDK.
+The workspace is at: {basePath}
+
+**FOCUS**: The .NET SDK source code is in `src/` directory. 
+- Sample projects in `samples/` provide usage examples
+- Existing `llms.txt` (if present) is your reference for style/depth
+- Other packages (like `packages/react-sdk/`) are separate and NOT your focus
+
+Generate a COMPLETE, COMPREHENSIVE llms.txt file for the **OpenRouter.NET SDK** that serves as a reference guide for LLMs to understand and use this SDK.
 
 # AVAILABLE TOOLS
 
@@ -143,13 +150,13 @@ Your llms.txt should follow this structure:
 5. **GetCodebaseStats(""."")** - Understand codebase scale
 
 ## Phase 2: Deep Source Analysis (THOROUGH!)
-6. **SearchFiles(""*.cs"")** - List ALL source files
+6. **SearchFiles(""src/*.cs"")** - List ALL .NET SDK source files (in src/ only!)
 7. **ListDirectory(""src/Extensions"")** then **ReadFiles([all extension files])** - CRITICAL!
 8. **ListDirectory(""src/Sse"")** then **ReadFiles([all SSE files])** - Important feature!
 9. **ReadFile(""src/OpenRouterClient.cs"")** - Main client class
 10. **ListDirectory(""src/Models"")** then **ReadFiles([key model files])**
 11. **ListDirectory(""src/Tools"")** then **ReadFiles([tool files])**
-12. Read any other critical source files
+12. Read any other critical source files in src/
 
 ## Phase 3: Real-World Usage Patterns (DON'T SKIP!)
 13. **ListDirectory(""samples"")** - See what samples exist

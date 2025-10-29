@@ -56,15 +56,17 @@ public class Agent
         Console.WriteLine();
 
         _conversationHistory.Add(Message.FromUser(
-            "Begin your analysis. Follow this approach:\n\n" +
+            "You are documenting the OpenRouter.NET SDK (the C#/.NET SDK in the src/ directory).\n\n" +
+            "Follow this approach:\n\n" +
             "1. FIRST: Read llms.txt if it exists to understand expected depth and style\n" +
             "2. Explore the codebase structure (GetDirectoryTree)\n" +
-            "3. Read README.md and .csproj files\n" +
+            "3. Read README.md and OpenRouter.NET.csproj\n" +
             "4. Read ALL files in src/Extensions/ - these are critical!\n" +
             "5. Read ALL files in src/Sse/ if it exists\n" +
-            "6. Explore samples/ directory for real-world usage\n" +
-            "7. Read other important source files\n" +
-            "8. Finally, generate comprehensive llms.txt documentation (2000+ lines)\n\n" +
+            "6. Explore samples/ directory for real-world C# usage patterns\n" +
+            "7. Read other important source files in src/\n" +
+            "8. Finally, call WriteLlmsTxt ONCE with comprehensive documentation (2000+ lines)\n\n" +
+            "IMPORTANT: After you call WriteLlmsTxt successfully, you are DONE. Do not continue exploring or call it again.\n\n" +
             "Take your time and be thorough. Quality over speed!"));
 
         int iteration = 0;
@@ -105,18 +107,49 @@ public class Agent
                         {
                             case ToolCallState.Executing:
                                 Console.WriteLine($"\n\n🔧 Executing tool: {chunk.ServerTool.ToolName}");
-                                Console.WriteLine($"   Arguments: {TruncateForDisplay(chunk.ServerTool.Arguments, 100)}");
+                                
+                                // Special handling for WriteLlmsTxt
+                                if (chunk.ServerTool.ToolName == "WriteLlmsTxt")
+                                {
+                                    Console.WriteLine("   ⚠️  WRITING FINAL OUTPUT - This may take a moment...");
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"   Arguments: {TruncateForDisplay(chunk.ServerTool.Arguments, 100)}");
+                                }
                                 break;
 
                             case ToolCallState.Completed:
                                 var result = chunk.ServerTool.Result ?? "No result";
                                 Console.WriteLine($"✅ Tool completed in {chunk.ServerTool.ExecutionTime?.TotalMilliseconds:F0}ms");
-                                Console.WriteLine($"   Result preview: {TruncateForDisplay(result, 200)}");
+                                
+                                // Special handling for WriteLlmsTxt success
+                                if (chunk.ServerTool.ToolName == "WriteLlmsTxt")
+                                {
+                                    Console.WriteLine("\n" + "="​.PadRight(60, '='));
+                                    Console.WriteLine("🎉 WriteLlmsTxt SUCCEEDED!");
+                                    Console.WriteLine("="​.PadRight(60, '='));
+                                    Console.WriteLine(result);
+                                    
+                                    // Force break on next check
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"   Result preview: {TruncateForDisplay(result, 200)}");
+                                }
+                                
                                 toolCalls.Add((chunk.ServerTool.ToolName, result));
                                 break;
 
                             case ToolCallState.Error:
                                 Console.WriteLine($"❌ Tool error: {chunk.ServerTool.Error}");
+                                
+                                // If WriteLlmsTxt failed, show prominent error
+                                if (chunk.ServerTool.ToolName == "WriteLlmsTxt")
+                                {
+                                    Console.WriteLine("\n⚠️⚠️⚠️ WriteLlmsTxt FAILED! ⚠️⚠️⚠️");
+                                    Console.WriteLine("The agent will likely retry. Check the error above.");
+                                }
                                 break;
                         }
                     }
@@ -154,7 +187,27 @@ public class Agent
                 Console.WriteLine($"\n📝 Files read during analysis: {_fileTools.GetReadFiles().Count()}");
                 Console.WriteLine($"🔄 Iterations used: {iteration}/{_maxIterations}");
                 Console.WriteLine($"\n🎉 llms.txt has been generated!");
+                
+                // Give the agent one more chance to see the success message
+                if (!string.IsNullOrEmpty(responseText) || hasContent)
+                {
+                    Console.WriteLine($"\n📋 Final agent response: {TruncateForDisplay(responseText, 300)}");
+                }
+                
                 return true;
+            }
+
+            // Check if we're stuck (agent keeps trying after WriteLlmsTxt was called)
+            if (iteration > 5 && toolCalls.Any(t => t.name == "WriteLlmsTxt"))
+            {
+                Console.WriteLine("\n⚠️  Warning: WriteLlmsTxt was called but agent hasn't stopped.");
+                Console.WriteLine("Checking if file was actually written...");
+                
+                if (_writeTool.HasWritten)
+                {
+                    Console.WriteLine("✅ File WAS written successfully. Stopping agent.");
+                    return true;
+                }
             }
 
             if (iteration >= _maxIterations)
