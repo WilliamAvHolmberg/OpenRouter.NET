@@ -29,7 +29,7 @@ export function ArtifactBlock({ block }: ArtifactBlockProps) {
 
   // Auto-expand drawer when React runner artifact completes
   useEffect(() => {
-    if (block.language === 'tsx.reactrunner' && !block.isStreaming && block.content) {
+    if (drawer &&block.language === 'tsx.reactrunner' && !block.isStreaming && block.content) {
       drawer.setContent(
         <div className="space-y-4">
           <div className="flex items-center gap-3 pb-3 border-b border-slate-200/50">
@@ -73,7 +73,7 @@ export function ArtifactBlock({ block }: ArtifactBlockProps) {
           {block.language === 'tsx.reactrunner' && (
             <button
               className="text-[11px] px-3 py-1 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-sm hover:shadow-md transition-all"
-              onClick={() => drawer.setContent(
+              onClick={() => drawer && drawer.setContent(
                 <div className="space-y-4">
                   <div className="flex items-center gap-3 pb-3 border-b border-slate-200/50">
                     <div className="flex-1">
