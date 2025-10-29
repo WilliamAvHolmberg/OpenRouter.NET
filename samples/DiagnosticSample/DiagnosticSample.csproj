@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\OpenRouter.NET.csproj" />
+    <ProjectReference Include="..\..\packages\dotnet-sdk\OpenRouter.NET.csproj" />
   </ItemGroup>
 
   <ItemGroup>
