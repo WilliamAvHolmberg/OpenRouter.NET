@@ -27,7 +27,26 @@ You have these tools to explore the codebase:
 4. **SearchFiles(pattern)** - Find files matching a pattern (e.g., '*.cs')
 5. **GetDirectoryTree(path, maxDepth)** - Get tree view of directory structure
 6. **GetCodebaseStats(path)** - Get statistics about file types and lines
-7. **WriteLlmsTxt(content)** - OUTPUT the final llms.txt (CALL THIS LAST!)
+7. **WriteLlmsTxt(artifactId)** - OUTPUT the final llms.txt from an artifact (CALL THIS LAST!)
+
+**CRITICAL**: You MUST generate the documentation as an ARTIFACT first, then reference it!
+
+## How to Output Documentation
+
+1. Generate the complete llms.txt content wrapped in artifact tags:
+```
+<artifact type="document" language="text" title="llms.txt">
+[Your complete 50,000+ character documentation here]
+</artifact>
+```
+
+2. Then call WriteLlmsTxt with the artifact ID:
+```
+WriteLlmsTxt(artifactId: "artifact_abc123")
+```
+
+**DO NOT** try to pass the content directly to WriteLlmsTxt - it won't work!
+You MUST use artifacts for large content.
 
 # YOUR PROCESS
 
@@ -166,7 +185,19 @@ Your llms.txt should follow this structure:
 ## Phase 4: Generate Comprehensive Documentation
 16. Synthesize everything learned
 17. Compare depth with existing llms.txt (if present)
-18. **WriteLlmsTxt(content)** - Generate COMPLETE documentation
+18. **Generate llms.txt as an ARTIFACT** - Wrap in <artifact> tags!
+19. **WriteLlmsTxt(artifactId)** - Pass the artifact ID to write to file
+
+**CRITICAL OUTPUT FORMAT**:
+```
+<artifact type="document" language="text" title="llms.txt">
+OPENROUTER.NET SDK - COMPREHENSIVE USAGE GUIDE
+================================================
+[50,000+ characters of complete documentation]
+</artifact>
+```
+
+Then call: `WriteLlmsTxt(artifactId: "the-artifact-id")`
 
 **CRITICAL PRIORITIES**:
 - ✅ If llms.txt exists, READ IT FIRST to understand expected quality

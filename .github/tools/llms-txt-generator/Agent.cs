@@ -16,6 +16,8 @@ public class Agent
     private readonly string _model;
     private readonly int _maxIterations;
 
+    private readonly List<Artifact> _artifacts = new();
+
     public Agent(
         OpenRouterClient client,
         string basePath,
@@ -25,7 +27,7 @@ public class Agent
     {
         _client = client;
         _fileTools = new FileSystemTools(basePath);
-        _writeTool = new WriteLlmsTxtTool(outputPath);
+        _writeTool = new WriteLlmsTxtTool(outputPath, () => _artifacts);
         _model = model;
         _maxIterations = maxIterations;
 
@@ -65,8 +67,14 @@ public class Agent
             "5. Read ALL files in src/Sse/ if it exists\n" +
             "6. Explore samples/ directory for real-world C# usage patterns\n" +
             "7. Read other important source files in src/\n" +
-            "8. Finally, call WriteLlmsTxt ONCE with comprehensive documentation (2000+ lines)\n\n" +
-            "IMPORTANT: After you call WriteLlmsTxt successfully, you are DONE. Do not continue exploring or call it again.\n\n" +
+            "8. Generate the complete documentation as an ARTIFACT using <artifact> tags\n" +
+            "9. Finally, call WriteLlmsTxt with the artifact ID\n\n" +
+            "CRITICAL OUTPUT FORMAT:\n" +
+            "<artifact type=\"document\" language=\"text\" title=\"llms.txt\">\n" +
+            "[Your complete 50,000+ character documentation here]\n" +
+            "</artifact>\n\n" +
+            "Then: WriteLlmsTxt(artifactId: \"artifact-id\")\n\n" +
+            "After successfully calling WriteLlmsTxt, you are DONE. Do not continue.\n\n" +
             "Take your time and be thorough. Quality over speed!"));
 
         int iteration = 0;
@@ -83,8 +91,11 @@ public class Agent
                 Model = _model,
                 Messages = _conversationHistory,
                 Temperature = 0.3f,
-                MaxTokens = 4000
+                MaxTokens = 8000  // Increased for artifact generation
             };
+            
+            // Enable artifact support for documentation generation
+            request.EnableArtifactSupport();
 
             var response = new StringBuilder();
             var toolCalls = new List<(string name, string result)>();
@@ -99,6 +110,32 @@ public class Agent
                         response.Append(chunk.TextDelta);
                         Console.Write(chunk.TextDelta);
                         hasContent = true;
+                    }
+                    
+                    // Handle artifacts
+                    if (chunk.Artifact != null)
+                    {
+                        if (chunk.Artifact is ArtifactStarted started)
+                        {
+                            Console.WriteLine($"\n\n📦 Artifact started: {started.Title} (Type: {started.Type})");
+                        }
+                        else if (chunk.Artifact is ArtifactCompleted completed)
+                        {
+                            Console.WriteLine($"\n\n✅ Artifact completed: {completed.Title}");
+                            Console.WriteLine($"   ID: {completed.ArtifactId}");
+                            Console.WriteLine($"   Size: {completed.Content?.Length ?? 0} characters");
+                            
+                            // Store artifact
+                            var artifact = new Artifact
+                            {
+                                Id = completed.ArtifactId,
+                                Type = completed.Type,
+                                Title = completed.Title,
+                                Content = completed.Content ?? "",
+                                Language = completed.Language
+                            };
+                            _artifacts.Add(artifact);
+                        }
                     }
 
                     if (chunk.ServerTool != null)

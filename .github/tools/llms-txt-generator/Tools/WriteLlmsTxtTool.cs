@@ -1,4 +1,5 @@
 using OpenRouter.NET.Tools;
+using OpenRouter.NET.Models;
 using System.Text;
 
 namespace LlmsTxtGenerator.Tools;
@@ -7,15 +8,17 @@ public class WriteLlmsTxtTool
 {
     private readonly string _outputPath;
     private bool _hasWritten = false;
+    private readonly Func<List<Artifact>> _getArtifacts;
 
-    public WriteLlmsTxtTool(string outputPath)
+    public WriteLlmsTxtTool(string outputPath, Func<List<Artifact>> getArtifacts)
     {
         _outputPath = outputPath;
+        _getArtifacts = getArtifacts;
     }
 
-    [ToolMethod("Write the final llms.txt content. Call this ONLY ONCE when you have completed your analysis and are ready to output the complete documentation. After calling this successfully, your task is COMPLETE and you should stop.")]
+    [ToolMethod("Write the final llms.txt content from an artifact. First generate the documentation as an artifact (using <artifact> tags), then call this tool with the artifact ID. After calling this successfully, your task is COMPLETE and you should stop.")]
     public string WriteLlmsTxt(
-        [ToolParameter("The complete llms.txt content with all sections, examples, and documentation. Must be comprehensive (2000+ lines recommended).")] string content)
+        [ToolParameter("The artifact ID containing the complete llms.txt documentation. You must generate an artifact first before calling this.")] string artifactId)
     {
         // First, validate and save diagnostics
         var diagnosticInfo = new StringBuilder();
@@ -24,9 +27,7 @@ public class WriteLlmsTxtTool
         diagnosticInfo.AppendLine("=".PadRight(70, '='));
         diagnosticInfo.AppendLine($"Output path: {_outputPath}");
         diagnosticInfo.AppendLine($"Already written: {_hasWritten}");
-        diagnosticInfo.AppendLine($"Content provided: {content != null}");
-        diagnosticInfo.AppendLine($"Content length: {content?.Length ?? 0} characters");
-        diagnosticInfo.AppendLine($"Content lines: {(content?.Split('\n').Length ?? 0)}");
+        diagnosticInfo.AppendLine($"Artifact ID provided: {artifactId}");
         diagnosticInfo.AppendLine($"Current directory: {Directory.GetCurrentDirectory()}");
         
         var outputDir = Path.GetDirectoryName(_outputPath);
@@ -51,9 +52,49 @@ public class WriteLlmsTxtTool
                 throw new InvalidOperationException(errorMsg + "\n\n" + diagnosticInfo.ToString());
             }
 
+            if (string.IsNullOrWhiteSpace(artifactId))
+            {
+                var errorMsg = "❌ CRITICAL ERROR: artifactId cannot be empty. " +
+                              "You must first generate the documentation as an artifact using <artifact> tags, " +
+                              "then call this tool with the artifact ID.";
+                
+                diagnosticInfo.AppendLine($"\nERROR: {errorMsg}");
+                Console.WriteLine(diagnosticInfo.ToString());
+                
+                throw new ArgumentException(errorMsg + "\n\n" + diagnosticInfo.ToString());
+            }
+
+            // Get artifacts
+            var artifacts = _getArtifacts();
+            diagnosticInfo.AppendLine($"Available artifacts: {artifacts.Count}");
+            foreach (var art in artifacts)
+            {
+                diagnosticInfo.AppendLine($"  - {art.Id}: {art.Title} ({art.Content?.Length ?? 0} chars)");
+            }
+            
+            // Find the artifact
+            var artifact = artifacts.FirstOrDefault(a => a.Id == artifactId);
+            
+            if (artifact == null)
+            {
+                var errorMsg = $"❌ CRITICAL ERROR: Artifact '{artifactId}' not found. " +
+                              $"Available artifacts: {string.Join(", ", artifacts.Select(a => a.Id))}. " +
+                              "Did you generate the artifact first?";
+                
+                diagnosticInfo.AppendLine($"\nERROR: {errorMsg}");
+                Console.WriteLine(diagnosticInfo.ToString());
+                
+                throw new ArgumentException(errorMsg + "\n\n" + diagnosticInfo.ToString());
+            }
+            
+            var content = artifact.Content;
+            diagnosticInfo.AppendLine($"\n✅ Found artifact: {artifact.Title}");
+            diagnosticInfo.AppendLine($"   Content length: {content?.Length ?? 0} characters");
+            diagnosticInfo.AppendLine($"   Content lines: {(content?.Split('\n').Length ?? 0)}");
+
             if (string.IsNullOrWhiteSpace(content))
             {
-                var errorMsg = "❌ CRITICAL ERROR: Content cannot be empty. Please provide the complete llms.txt documentation.";
+                var errorMsg = "❌ CRITICAL ERROR: Artifact content is empty.";
                 
                 diagnosticInfo.AppendLine($"\nERROR: {errorMsg}");
                 Console.WriteLine(diagnosticInfo.ToString());
@@ -119,6 +160,7 @@ public class WriteLlmsTxtTool
                    $"📏 Lines: {lines:N0}\n" +
                    $"📝 Characters: {chars:N0}\n" +
                    $"💾 File size: {fileSize:N0} bytes\n" +
+                   $"📦 Source artifact: {artifact.Title} ({artifactId})\n" +
                    $"\n" +
                    $"✅ Your task is COMPLETE. The documentation has been generated.\n" +
                    $"✅ You should now STOP. Do not continue exploring or call tools.\n" +
@@ -150,17 +192,16 @@ public class WriteLlmsTxtTool
                 diagnosticInfo.AppendLine(ex.InnerException.StackTrace ?? "(no stack trace)");
             }
             
-            diagnosticInfo.AppendLine("\nCONTENT PREVIEW (first 1000 chars):");
-            diagnosticInfo.AppendLine("---");
-            if (content != null)
+            diagnosticInfo.AppendLine("\nAVAILABLE ARTIFACTS:");
+            var artifacts = _getArtifacts();
+            foreach (var art in artifacts)
             {
-                diagnosticInfo.AppendLine(content.Length > 1000 ? content.Substring(0, 1000) + "..." : content);
+                diagnosticInfo.AppendLine($"  - {art.Id}: {art.Title}");
+                if (art.Content != null)
+                {
+                    diagnosticInfo.AppendLine($"    Content preview: {(art.Content.Length > 200 ? art.Content.Substring(0, 200) + "..." : art.Content)}");
+                }
             }
-            else
-            {
-                diagnosticInfo.AppendLine("(content is null)");
-            }
-            diagnosticInfo.AppendLine("---");
             
             diagnosticInfo.AppendLine("\nENVIRONMENT INFO:");
             diagnosticInfo.AppendLine($"OS: {Environment.OSVersion}");
