@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Json.Schema;
 using OpenRouter.NET.Events;
 using OpenRouter.NET.Models;
 
@@ -907,6 +908,8 @@ public class OpenRouterClient
 
                 var generatedObject = JsonSerializer.Deserialize<JsonElement>(toolCall.Function.Arguments);
 
+                ValidateJsonAgainstSchema(schema, generatedObject);
+
                 Log($"Successfully generated structured object on attempt {attempt + 1}");
                 
                 return new GenerateObjectResult
@@ -928,6 +931,52 @@ public class OpenRouterClient
         throw new OpenRouterException(
             $"Failed to generate structured object after {options.MaxRetries} attempts. Last error: {lastException?.Message}",
             lastException);
+    }
+
+    private void ValidateJsonAgainstSchema(JsonElement schema, JsonElement generatedObject)
+    {
+        var schemaObj = JsonSerializer.Deserialize<JsonSchema>(schema.GetRawText());
+        if (schemaObj == null)
+        {
+            throw new OpenRouterException("Invalid schema provided for validation");
+        }
+
+        var results = schemaObj.Evaluate(generatedObject, new EvaluationOptions 
+        { 
+            OutputFormat = OutputFormat.Hierarchical 
+        });
+
+        if (!results.IsValid)
+        {
+            var errors = new StringBuilder();
+            errors.AppendLine("Generated object does not match schema:");
+            
+            CollectValidationErrors(results, errors, "");
+
+            throw new OpenRouterException(errors.ToString().TrimEnd());
+        }
+    }
+
+    private void CollectValidationErrors(EvaluationResults results, StringBuilder errors, string path)
+    {
+        if (results.Errors != null)
+        {
+            foreach (var (key, value) in results.Errors)
+            {
+                errors.AppendLine($"  - {path}{key}: {value}");
+            }
+        }
+
+        if (results.Details != null)
+        {
+            foreach (var detail in results.Details)
+            {
+                var newPath = string.IsNullOrEmpty(path) 
+                    ? detail.InstanceLocation.ToString() 
+                    : $"{path}/{detail.InstanceLocation}";
+                CollectValidationErrors(detail, errors, newPath);
+            }
+        }
     }
 
     private void Log(string message)
