@@ -11,6 +11,7 @@ export { OpenRouterClient } from './client.ts';
 export { useOpenRouterChat } from './hooks/useOpenRouterChat.ts';
 export { useStreamingText } from './hooks/useStreamingText.ts';
 export { useOpenRouterModels } from './hooks/useOpenRouterModels.ts';
+export { useGenerateObject } from './hooks/useGenerateObject.ts';
 
 // Types
 export type { 
@@ -50,6 +51,10 @@ export type {
   UseChatReturn,
   DebugControls,
   StreamingTextState,
+  
+  // Generate Object Types
+  GenerateObjectRequest,
+  GenerateObjectResponse,
 } from './types.ts';
 
 // Utilities

@@ -10,7 +10,9 @@ export function Navigation() {
     { href: '/', label: 'Home' },
     { href: '/chat', label: 'Full Chat' },
     { href: '/orders', label: 'Orders' },
-    { href: '/dashboard', label: 'Dashboard' }
+    { href: '/dashboard', label: 'Dashboard' },
+    { href: '/generate-object', label: 'Generate Object' },
+    { href: '/translations', label: 'Translations' }
   ];
 
   return (

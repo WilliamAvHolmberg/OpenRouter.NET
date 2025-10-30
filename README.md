@@ -1,6 +1,33 @@
 # OpenRouter.NET
 
-A modern .NET SDK for the OpenRouter API - providing a unified interface to access multiple LLM providers.
+A modern .NET SDK for the OpenRouter API - providing a unified interface to access multiple LLM providers with streaming support, tool calling, artifacts, and **structured object generation**.
+
+## 🆕 Generate Object - Get Structured Data from LLMs
+
+Generate validated, typed objects from LLMs without manual JSON parsing:
+
+```typescript
+import { z } from 'zod';
+import { useGenerateObject } from '@openrouter-dotnet/react';
+
+const schema = z.object({
+  name: z.string(),
+  age: z.number(),
+  hobbies: z.array(z.string())
+});
+
+const { object } = useGenerateObject({
+  schema,
+  prompt: "Generate a profile for a developer named Sarah",
+  endpoint: '/api/generate-object'
+});
+
+// object is fully typed with TypeScript IntelliSense!
+```
+
+**[📘 Quick Start Guide](./GENERATE_OBJECT_QUICKSTART.md)** | **[📚 Full Documentation](./packages/dotnet-sdk/src/GenerateObject.md)**
+
+---
 
 ## Features
 
@@ -12,6 +39,7 @@ A modern .NET SDK for the OpenRouter API - providing a unified interface to acce
 🛠️ Tool calling (server-side auto-execute and client-side modes)
 📄 Artifact support with incremental parsing
 ⚡ Async enumerable streaming (IAsyncEnumerable)
+✨ **NEW: Structured object generation with Zod schemas**
 
 ## Installation
 
