@@ -5,6 +5,7 @@ using OpenRouter.NET.Tools;
 using System.Collections.Concurrent;
 using StreamingWebApiSample;
 using OpenRouter.NET.Artifacts;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
