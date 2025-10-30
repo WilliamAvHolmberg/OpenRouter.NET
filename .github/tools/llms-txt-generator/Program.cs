@@ -16,7 +16,7 @@ var outputOption = new Option<string>(
 var modelOption = new Option<string>(
     name: "--model",
     description: "OpenRouter model to use",
-    getDefaultValue: () => "anthropic/claude-3.5-sonnet");
+    getDefaultValue: () => "anthropic/claude-haiku-4.5");
 
 var maxIterationsOption = new Option<int>(
     name: "--max-iterations",
@@ -81,7 +81,7 @@ rootCommand.SetHandler(async (path, output, model, maxIterations, apiKey) =>
         Console.WriteLine("🚀 Initializing agent...");
         Console.WriteLine();
 
-        using var client = new OpenRouter.NET.OpenRouterClient(resolvedApiKey);
+        var client = new OpenRouter.NET.OpenRouterClient(resolvedApiKey);
         var agent = new Agent(
             client,
             fullPath,

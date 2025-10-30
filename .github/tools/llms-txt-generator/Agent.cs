@@ -82,9 +82,9 @@ public class Agent
         while (iteration < _maxIterations && !_writeTool.HasWritten)
         {
             iteration++;
-            Console.WriteLine($"\n{'='​,60}");
+            Console.WriteLine($"\n{'=',60}");
             Console.WriteLine($"🔄 Iteration {iteration}/{_maxIterations}");
-            Console.WriteLine($"{'='​,60}\n");
+            Console.WriteLine($"{'=',60}\n");
 
             var request = new ChatCompletionRequest
             {
@@ -163,9 +163,9 @@ public class Agent
                                 // Special handling for WriteLlmsTxt success
                                 if (chunk.ServerTool.ToolName == "WriteLlmsTxt")
                                 {
-                                    Console.WriteLine("\n" + "="​.PadRight(60, '='));
+                                    Console.WriteLine("\n" + "=".PadRight(60, '='));
                                     Console.WriteLine("🎉 WriteLlmsTxt SUCCEEDED!");
-                                    Console.WriteLine("="​.PadRight(60, '='));
+                                    Console.WriteLine("=".PadRight(60, '='));
                                     Console.WriteLine(result);
                                     
                                     // Force break on next check
@@ -249,9 +249,9 @@ public class Agent
 
             if (_writeTool.HasWritten)
             {
-                Console.WriteLine("\n\n" + "="​.PadRight(60, '='));
+                Console.WriteLine("\n\n" + "=".PadRight(60, '='));
                 Console.WriteLine("✅ AGENT COMPLETED SUCCESSFULLY!");
-                Console.WriteLine("="​.PadRight(60, '='));
+                Console.WriteLine("=".PadRight(60, '='));
                 Console.WriteLine($"\n📝 Files read during analysis: {_fileTools.GetReadFiles().Count()}");
                 Console.WriteLine($"🔄 Iterations used: {iteration}/{_maxIterations}");
                 Console.WriteLine($"\n🎉 llms.txt has been generated!");

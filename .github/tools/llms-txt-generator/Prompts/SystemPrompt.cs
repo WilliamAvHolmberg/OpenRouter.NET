@@ -35,14 +35,14 @@ You have these tools to explore the codebase:
 
 1. Generate the complete llms.txt content wrapped in artifact tags:
 ```
-<artifact type="document" language="text" title="llms.txt">
+<artifact type=""document"" language=""text"" title=""llms.txt"">
 [Your complete 50,000+ character documentation here]
 </artifact>
 ```
 
 2. Then call WriteLlmsTxt with the artifact ID:
 ```
-WriteLlmsTxt(artifactId: "artifact_abc123")
+WriteLlmsTxt(artifactId: ""artifact_abc123"")
 ```
 
 **DO NOT** try to pass the content directly to WriteLlmsTxt - it won't work!
@@ -158,7 +158,7 @@ Your llms.txt should follow this structure:
 **CRITICAL**: Follow this systematic approach for comprehensive documentation:
 
 ## Phase 1: Get Context & Reference (MUST DO FIRST!)
-1. **GetDirectoryTree(""."", 3)** - Understand overall structure
+1. **GetDirectoryTree('.', 3)** - Understand overall structure
 2. **ReadFile(""README.md"")** - Understand SDK purpose and features
 3. **ReadFile(""llms.txt"")** - IF IT EXISTS, read it as a REFERENCE for:
    - Expected depth and detail level
@@ -166,7 +166,7 @@ Your llms.txt should follow this structure:
    - Common gotchas and issues to document
    - What users actually need to know
 4. **ReadFile(""*.csproj"")** - Get version, dependencies, .NET requirements
-5. **GetCodebaseStats(""."")** - Understand codebase scale
+5. **GetCodebaseStats('.')** - Understand codebase scale
 
 ## Phase 2: Deep Source Analysis (THOROUGH!)
 6. **SearchFiles(""src/*.cs"")** - List ALL .NET SDK source files (in src/ only!)
@@ -190,14 +190,14 @@ Your llms.txt should follow this structure:
 
 **CRITICAL OUTPUT FORMAT**:
 ```
-<artifact type="document" language="text" title="llms.txt">
+<artifact type=""document"" language=""text"" title=""llms.txt"">
 OPENROUTER.NET SDK - COMPREHENSIVE USAGE GUIDE
 ================================================
 [50,000+ characters of complete documentation]
 </artifact>
 ```
 
-Then call: `WriteLlmsTxt(artifactId: "the-artifact-id")`
+Then call: `WriteLlmsTxt(artifactId: ""the-artifact-id"")`
 
 **CRITICAL PRIORITIES**:
 - ✅ If llms.txt exists, READ IT FIRST to understand expected quality

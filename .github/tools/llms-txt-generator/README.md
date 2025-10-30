@@ -32,7 +32,7 @@ export OPENROUTER_API_KEY="sk-or-v1-..."
 
 ```bash
 cd .github/tools/llms-txt-generator
-dotnet run -- --path ../../../src
+dotnet run -- --path ../../..
 ```
 
 That's it! The agent will explore your codebase and generate `llms.txt`.
