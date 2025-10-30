@@ -18,7 +18,7 @@ public class WriteLlmsTxtTool
 
     [ToolMethod("Write the final llms.txt content from an artifact. First generate the documentation as an artifact (using <artifact> tags), then call this tool with the artifact ID. After calling this successfully, your task is COMPLETE and you should stop.")]
     public string WriteLlmsTxt(
-        [ToolParameter("The artifact ID containing the complete llms.txt documentation. You must generate an artifact first before calling this.")] string artifactId)
+        [ToolParameter("The artifact ID containing the complete llms.txt documentation. You must generate an artifact first before calling this. Check the artifact ID carefully!")] string artifactId)
     {
         // First, validate and save diagnostics
         var diagnosticInfo = new StringBuilder();
@@ -52,18 +52,6 @@ public class WriteLlmsTxtTool
                 throw new InvalidOperationException(errorMsg + "\n\n" + diagnosticInfo.ToString());
             }
 
-            if (string.IsNullOrWhiteSpace(artifactId))
-            {
-                var errorMsg = "❌ CRITICAL ERROR: artifactId cannot be empty. " +
-                              "You must first generate the documentation as an artifact using <artifact> tags, " +
-                              "then call this tool with the artifact ID.";
-                
-                diagnosticInfo.AppendLine($"\nERROR: {errorMsg}");
-                Console.WriteLine(diagnosticInfo.ToString());
-                
-                throw new ArgumentException(errorMsg + "\n\n" + diagnosticInfo.ToString());
-            }
-
             // Get artifacts
             var artifacts = _getArtifacts();
             diagnosticInfo.AppendLine($"Available artifacts: {artifacts.Count}");
@@ -72,19 +60,63 @@ public class WriteLlmsTxtTool
                 diagnosticInfo.AppendLine($"  - {art.Id}: {art.Title} ({art.Content?.Length ?? 0} chars)");
             }
             
-            // Find the artifact
-            var artifact = artifacts.FirstOrDefault(a => a.Id == artifactId);
+            // If artifactId is empty but there's exactly one artifact, use it
+            Artifact? artifact = null;
             
-            if (artifact == null)
+            if (string.IsNullOrWhiteSpace(artifactId))
             {
-                var errorMsg = $"❌ CRITICAL ERROR: Artifact '{artifactId}' not found. " +
-                              $"Available artifacts: {string.Join(", ", artifacts.Select(a => a.Id))}. " +
-                              "Did you generate the artifact first?";
+                if (artifacts.Count == 1)
+                {
+                    artifact = artifacts[0];
+                    diagnosticInfo.AppendLine($"\n✅ No artifact ID provided, but found exactly one artifact. Using: {artifact.Id}");
+                }
+                else
+                {
+                    var errorMsg = "❌ CRITICAL ERROR: artifactId cannot be empty. " +
+                                  "You must first generate the documentation as an artifact using <artifact> tags, " +
+                                  "then call this tool with the artifact ID.";
+                    
+                    diagnosticInfo.AppendLine($"\nERROR: {errorMsg}");
+                    Console.WriteLine(diagnosticInfo.ToString());
+                    
+                    throw new ArgumentException(errorMsg + "\n\n" + diagnosticInfo.ToString());
+                }
+            }
+            else
+            {
+                // Try exact match first
+                artifact = artifacts.FirstOrDefault(a => a.Id == artifactId);
                 
-                diagnosticInfo.AppendLine($"\nERROR: {errorMsg}");
-                Console.WriteLine(diagnosticInfo.ToString());
+                // If not found, try case-insensitive match
+                if (artifact == null)
+                {
+                    artifact = artifacts.FirstOrDefault(a => 
+                        string.Equals(a.Id, artifactId, StringComparison.OrdinalIgnoreCase));
+                    
+                    if (artifact != null)
+                    {
+                        diagnosticInfo.AppendLine($"\n⚠️  Artifact ID mismatch (case difference). Found: {artifact.Id}");
+                    }
+                }
                 
-                throw new ArgumentException(errorMsg + "\n\n" + diagnosticInfo.ToString());
+                // If still not found but there's only one artifact, use it
+                if (artifact == null && artifacts.Count == 1)
+                {
+                    artifact = artifacts[0];
+                    diagnosticInfo.AppendLine($"\n⚠️  Artifact ID '{artifactId}' not found, but only one artifact exists. Using: {artifact.Id}");
+                }
+                
+                if (artifact == null)
+                {
+                    var errorMsg = $"❌ CRITICAL ERROR: Artifact '{artifactId}' not found. " +
+                                  $"Available artifacts: {string.Join(", ", artifacts.Select(a => a.Id))}. " +
+                                  "Check the artifact ID carefully!";
+                    
+                    diagnosticInfo.AppendLine($"\nERROR: {errorMsg}");
+                    Console.WriteLine(diagnosticInfo.ToString());
+                    
+                    throw new ArgumentException(errorMsg + "\n\n" + diagnosticInfo.ToString());
+                }
             }
             
             var content = artifact.Content;
