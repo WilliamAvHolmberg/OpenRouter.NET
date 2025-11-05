@@ -11,40 +11,61 @@ public static class SchemaGenerator
     /// </summary>
     public static object GenerateSchema(Type type)
     {
-        var schema = new Dictionary<string, object>
+        var visited = new HashSet<Type>();
+        return GenerateSchema(type, visited);
+    }
+
+    private static object GenerateSchema(Type type, HashSet<Type> visited)
+    {
+        // Prevent infinite recursion on circular references
+        if (visited.Contains(type))
         {
-            ["type"] = "object",
-            ["properties"] = new Dictionary<string, object>(),
-            ["additionalProperties"] = false
-        };
+            return new Dictionary<string, object> { ["type"] = "object" };
+        }
 
-        var properties = (Dictionary<string, object>)schema["properties"];
-        var required = new List<string>();
+        visited.Add(type);
 
-        var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Where(p => p.CanRead);
-
-        foreach (var prop in props)
+        try
         {
-            var propSchema = GetPropertySchemaForType(prop);
-            if (propSchema.Schema != null)
+            var schema = new Dictionary<string, object>
             {
-                var jsonName = GetJsonPropertyName(prop);
-                properties[jsonName] = propSchema.Schema;
+                ["type"] = "object",
+                ["properties"] = new Dictionary<string, object>(),
+                ["additionalProperties"] = false
+            };
 
-                if (propSchema.IsRequired)
+            var properties = (Dictionary<string, object>)schema["properties"];
+            var required = new List<string>();
+
+            var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(p => p.CanRead);
+
+            foreach (var prop in props)
+            {
+                var propSchema = GetPropertySchemaForType(prop, visited);
+                if (propSchema.Schema != null)
                 {
-                    required.Add(jsonName);
+                    var jsonName = GetJsonPropertyName(prop);
+                    properties[jsonName] = propSchema.Schema;
+
+                    if (propSchema.IsRequired)
+                    {
+                        required.Add(jsonName);
+                    }
                 }
             }
-        }
 
-        if (required.Count > 0)
+            if (required.Count > 0)
+            {
+                schema["required"] = required;
+            }
+
+            return schema;
+        }
+        finally
         {
-            schema["required"] = required;
+            visited.Remove(type);
         }
-
-        return schema;
     }
 
     public static object GenerateParametersSchema(MethodInfo methodInfo)
@@ -89,28 +110,29 @@ public static class SchemaGenerator
     
     private static SchemaInfo GetParameterSchema(ParameterInfo param)
     {
+        var visited = new HashSet<Type>();
         var toolParamAttr = param.GetCustomAttribute<ToolParameterAttribute>();
         var paramType = param.ParameterType;
         var isRequired = toolParamAttr?.Required ?? !param.IsOptional;
-        
+
         var schema = new Dictionary<string, object>();
-        
+
         if (toolParamAttr?.Description != null)
         {
             schema["description"] = toolParamAttr.Description;
         }
-        
+
         if (paramType == typeof(string))
         {
             schema["type"] = "string";
         }
-        else if (paramType == typeof(int) || paramType == typeof(long) || 
+        else if (paramType == typeof(int) || paramType == typeof(long) ||
                  paramType == typeof(short) || paramType == typeof(byte) ||
                  paramType == typeof(BigInteger))
         {
             schema["type"] = "integer";
         }
-        else if (paramType == typeof(float) || paramType == typeof(double) || 
+        else if (paramType == typeof(float) || paramType == typeof(double) ||
                  paramType == typeof(decimal))
         {
             schema["type"] = "number";
@@ -119,12 +141,12 @@ public static class SchemaGenerator
         {
             schema["type"] = "boolean";
         }
-        else if (paramType.IsArray || (paramType.IsGenericType && 
+        else if (paramType.IsArray || (paramType.IsGenericType &&
                 (typeof(List<>).IsAssignableFrom(paramType.GetGenericTypeDefinition()) ||
                  typeof(IEnumerable<>).IsAssignableFrom(paramType.GetGenericTypeDefinition()))))
         {
             schema["type"] = "array";
-            
+
             Type? elementType;
             if (paramType.IsArray)
             {
@@ -134,18 +156,18 @@ public static class SchemaGenerator
             {
                 elementType = paramType.GetGenericArguments()[0];
             }
-            
-            schema["items"] = GetTypeSchema(elementType!);
+
+            schema["items"] = GetTypeSchema(elementType!, visited);
         }
         else if (paramType.IsClass && paramType != typeof(string))
         {
             schema["type"] = "object";
             var properties = new Dictionary<string, object>();
             var requiredProps = new List<string>();
-            
+
             var props = paramType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.CanRead);
-            
+
             foreach (var prop in props)
             {
                 var propSchema = GetPropertySchema(prop);
@@ -153,16 +175,16 @@ public static class SchemaGenerator
                 {
                     var jsonName = GetJsonPropertyName(prop);
                     properties[jsonName] = propSchema.Schema;
-                    
+
                     if (propSchema.IsRequired)
                     {
                         requiredProps.Add(jsonName);
                     }
                 }
             }
-            
+
             schema["properties"] = properties;
-            
+
             if (requiredProps.Count > 0)
             {
                 schema["required"] = requiredProps;
@@ -172,11 +194,11 @@ public static class SchemaGenerator
         {
             schema["type"] = "string";
         }
-        
+
         return new SchemaInfo { Schema = schema, IsRequired = isRequired };
     }
     
-    private static object GetTypeSchema(Type type)
+    private static object GetTypeSchema(Type type, HashSet<Type> visited)
     {
         var schema = new Dictionary<string, object>();
 
@@ -223,8 +245,8 @@ public static class SchemaGenerator
         }
         else if (type.IsClass && type != typeof(string))
         {
-            // Handle nested complex objects
-            return GenerateSchema(type);
+            // Handle nested complex objects with circular reference protection
+            return GenerateSchema(type, visited);
         }
         else
         {
@@ -234,7 +256,7 @@ public static class SchemaGenerator
         return schema;
     }
 
-    private static SchemaInfo GetPropertySchemaForType(PropertyInfo prop)
+    private static SchemaInfo GetPropertySchemaForType(PropertyInfo prop, HashSet<Type> visited)
     {
         var jsonIgnore = prop.GetCustomAttribute<JsonIgnoreAttribute>() != null;
 
@@ -264,7 +286,7 @@ public static class SchemaGenerator
         if (propType.IsArray)
         {
             schema["type"] = "array";
-            schema["items"] = GetTypeSchema(propType.GetElementType()!);
+            schema["items"] = GetTypeSchema(propType.GetElementType()!, visited);
             return new SchemaInfo { Schema = schema, IsRequired = isRequired };
         }
 
@@ -275,7 +297,7 @@ public static class SchemaGenerator
             {
                 var itemType = propType.GetGenericArguments()[0];
                 schema["type"] = "array";
-                schema["items"] = GetTypeSchema(itemType);
+                schema["items"] = GetTypeSchema(itemType, visited);
                 return new SchemaInfo { Schema = schema, IsRequired = isRequired };
             }
         }
@@ -283,39 +305,40 @@ public static class SchemaGenerator
         // Handle nested objects
         if (propType.IsClass && propType != typeof(string))
         {
-            schema = (Dictionary<string, object>)GenerateSchema(propType);
+            schema = (Dictionary<string, object>)GenerateSchema(propType, visited);
             return new SchemaInfo { Schema = schema, IsRequired = isRequired };
         }
 
         // Handle primitives and other types
-        schema = (Dictionary<string, object>)GetTypeSchema(propType);
+        schema = (Dictionary<string, object>)GetTypeSchema(propType, visited);
         return new SchemaInfo { Schema = schema, IsRequired = isRequired };
     }
     
     private static SchemaInfo GetPropertySchema(PropertyInfo prop)
     {
+        var visited = new HashSet<Type>();
         var jsonRequired = prop.GetCustomAttribute<RequiredAttribute>() != null;
         var jsonIgnore = prop.GetCustomAttribute<JsonIgnoreAttribute>() != null;
-        
+
         if (jsonIgnore)
         {
             return new SchemaInfo { Schema = null, IsRequired = false };
         }
-        
+
         var schema = new Dictionary<string, object>();
         var propType = prop.PropertyType;
-        
+
         if (propType == typeof(string))
         {
             schema["type"] = "string";
         }
-        else if (propType == typeof(int) || propType == typeof(long) || 
+        else if (propType == typeof(int) || propType == typeof(long) ||
                  propType == typeof(short) || propType == typeof(byte) ||
                  propType == typeof(BigInteger))
         {
             schema["type"] = "integer";
         }
-        else if (propType == typeof(float) || propType == typeof(double) || 
+        else if (propType == typeof(float) || propType == typeof(double) ||
                  propType == typeof(decimal))
         {
             schema["type"] = "number";
@@ -324,12 +347,12 @@ public static class SchemaGenerator
         {
             schema["type"] = "boolean";
         }
-        else if (propType.IsArray || (propType.IsGenericType && 
+        else if (propType.IsArray || (propType.IsGenericType &&
                 (typeof(List<>).IsAssignableFrom(propType.GetGenericTypeDefinition()) ||
                  typeof(IEnumerable<>).IsAssignableFrom(propType.GetGenericTypeDefinition()))))
         {
             schema["type"] = "array";
-            
+
             Type? elementType;
             if (propType.IsArray)
             {
@@ -339,14 +362,14 @@ public static class SchemaGenerator
             {
                 elementType = propType.GetGenericArguments()[0];
             }
-            
-            schema["items"] = GetTypeSchema(elementType!);
+
+            schema["items"] = GetTypeSchema(elementType!, visited);
         }
         else
         {
             schema["type"] = "string";
         }
-        
+
         return new SchemaInfo { Schema = schema, IsRequired = jsonRequired };
     }
     
