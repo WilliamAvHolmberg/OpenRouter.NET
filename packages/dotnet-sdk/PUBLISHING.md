@@ -65,7 +65,7 @@ dotnet nuget push ./nupkg/OpenRouter.NET.0.3.2.nupkg \
 
 Replace:
 - `0.4.1` with your actual version number
-- `YOUR_API_KEY` with your NuGet API key
+- `YOUR_NUGET_API_KEY` with your actual NuGet API key
 
 ### 7. Verify Publication
 
