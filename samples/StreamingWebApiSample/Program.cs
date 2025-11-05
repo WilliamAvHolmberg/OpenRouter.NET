@@ -5,6 +5,7 @@ using OpenRouter.NET.Tools;
 using System.Collections.Concurrent;
 using StreamingWebApiSample;
 using OpenRouter.NET.Artifacts;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -394,6 +395,43 @@ app.MapDelete("/api/conversation/{conversationId}", (string conversationId) =>
 })
 .WithName("ClearConversation");
 
+app.MapPost("/api/generate-object", async (GenerateObjectApiRequest request) =>
+{
+    var client = new OpenRouterClient(apiKey);
+    
+    try
+    {
+        var result = await client.GenerateObjectAsync(
+            schema: request.Schema,
+            prompt: request.Prompt,
+            model: request.Model ?? "openai/gpt-4o-mini",
+            options: new GenerateObjectOptions
+            {
+                Temperature = request.Temperature,
+                MaxTokens = request.MaxTokens,
+                MaxRetries = request.MaxRetries ?? 3,
+                SchemaWarningThresholdBytes = 2048
+            }
+        );
+        
+        return Results.Ok(new
+        {
+            @object = result.Object,
+            usage = result.Usage,
+            finishReason = result.FinishReason
+        });
+    }
+    catch (OpenRouterException ex)
+    {
+        return Results.BadRequest(new { error = ex.Message });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem(detail: ex.Message, statusCode: 500);
+    }
+})
+.WithName("GenerateObject");
+
 app.MapDelete("/api/dashboard/conversation/{conversationId}", (string conversationId) =>
 {
     dashboardConversationStore.TryRemove(conversationId, out _);
@@ -409,6 +447,16 @@ public record ChatRequest(string Message, string? Model = null, string? Conversa
 }
 
 public record DashboardChatRequest(string Message, string? Model = null, string? ConversationId = null);
+
+public record GenerateObjectApiRequest
+{
+    public JsonElement Schema { get; init; }
+    public string Prompt { get; init; } = string.Empty;
+    public string? Model { get; init; }
+    public double? Temperature { get; init; }
+    public int? MaxTokens { get; init; }
+    public int? MaxRetries { get; init; }
+}
 
 public record EnabledArtifact
 {

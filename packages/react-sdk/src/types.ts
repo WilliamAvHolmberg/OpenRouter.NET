@@ -343,3 +343,37 @@ export interface ToolCallsState {
   /** Completed tools */
   completedTools: ToolCallBlock[];
 }
+
+// ============================================================================
+// Generate Object Types
+// ============================================================================
+
+/** Request payload for generateObject API */
+export interface GenerateObjectRequest {
+  /** JSON Schema describing the desired output structure */
+  schema: any;
+  /** Prompt describing what to generate */
+  prompt: string;
+  /** Model to use (e.g., 'openai/gpt-4o-mini') */
+  model?: string;
+  /** Temperature for generation (0.0 - 2.0) */
+  temperature?: number;
+  /** Maximum tokens to generate */
+  maxTokens?: number;
+  /** Maximum retry attempts on failure */
+  maxRetries?: number;
+}
+
+/** Response from generateObject API */
+export interface GenerateObjectResponse {
+  /** Generated object matching the schema */
+  object: any;
+  /** Token usage information */
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  /** Reason for completion */
+  finishReason?: string;
+}
