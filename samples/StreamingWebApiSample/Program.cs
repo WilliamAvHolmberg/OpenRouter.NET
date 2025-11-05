@@ -432,6 +432,29 @@ app.MapPost("/api/generate-object", async (GenerateObjectApiRequest request) =>
 })
 .WithName("GenerateObject");
 
+// ✨ Strongly-typed structured outputs - no more JSON parsing!
+app.MapPost("/api/triage-bug", async (BugReportRequest request) =>
+{
+    var client = new OpenRouterClient(apiKey);
+
+    var analysis = await client.GenerateObjectAsync<BugAnalysis>(
+        prompt: $"Analyze this bug report and extract structured information:\n\n{request.Description}",
+        model: "anthropic/claude-sonnet-4.5"
+    );
+
+    // Clean, typed access to LLM output - no JsonElement.TryGetProperty() mess
+    return Results.Ok(new
+    {
+        title = analysis.Object.Title,
+        severity = analysis.Object.Severity,
+        priority = analysis.Object.Priority,
+        affectedComponents = analysis.Object.AffectedComponents,
+        reproSteps = analysis.Object.ReproductionSteps,
+        suggestedOwner = analysis.Object.AffectedComponents.FirstOrDefault() ?? "unassigned"
+    });
+})
+.WithName("TriageBug");
+
 app.MapDelete("/api/dashboard/conversation/{conversationId}", (string conversationId) =>
 {
     dashboardConversationStore.TryRemove(conversationId, out _);
@@ -447,6 +470,20 @@ public record ChatRequest(string Message, string? Model = null, string? Conversa
 }
 
 public record DashboardChatRequest(string Message, string? Model = null, string? ConversationId = null);
+
+public record BugReportRequest(string Description);
+
+public enum Severity { Low, Medium, High, Critical }
+public enum Priority { Low, Medium, High }
+
+public class BugAnalysis
+{
+    public string Title { get; set; } = string.Empty;
+    public Severity Severity { get; set; }
+    public Priority Priority { get; set; }
+    public List<string> AffectedComponents { get; set; } = new();
+    public List<string> ReproductionSteps { get; set; } = new();
+}
 
 public record GenerateObjectApiRequest
 {

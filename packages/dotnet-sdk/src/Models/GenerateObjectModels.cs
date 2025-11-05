@@ -22,11 +22,20 @@ public class GenerateObjectResult
 {
     [JsonPropertyName("object")]
     public JsonElement Object { get; set; }
-    
+
     [JsonPropertyName("usage")]
     public ResponseUsage? Usage { get; set; }
-    
+
     [JsonPropertyName("finishReason")]
+    public string? FinishReason { get; set; }
+}
+
+public class GenerateObjectResult<T> where T : class
+{
+    public T Object { get; set; } = null!;
+
+    public ResponseUsage? Usage { get; set; }
+
     public string? FinishReason { get; set; }
 }
 

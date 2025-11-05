@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -5,6 +6,7 @@ using System.Text.Json.Serialization;
 using Json.Schema;
 using OpenRouter.NET.Events;
 using OpenRouter.NET.Models;
+using OpenRouter.NET.Tools;
 
 namespace OpenRouter.NET;
 
@@ -21,6 +23,7 @@ public class OpenRouterClient
     private readonly List<Tool> _tools = new List<Tool>();
     private readonly Dictionary<string, Func<string, object>> _toolImplementations = new Dictionary<string, Func<string, object>>();
     private readonly Dictionary<string, ToolRegistration> _toolRegistry = new Dictionary<string, ToolRegistration>();
+    private static readonly ConcurrentDictionary<Type, JsonElement> _schemaCache = new ConcurrentDictionary<Type, JsonElement>();
     
     public event EventHandler<StreamEventArgs>? OnStreamEvent;
     public static string Version => "0.1.0";
@@ -930,7 +933,43 @@ public class OpenRouterClient
 
         throw new OpenRouterException(
             $"Failed to generate structured object after {options.MaxRetries} attempts. Last error: {lastException?.Message}",
-            lastException);
+            lastException!);
+    }
+
+    /// <summary>
+    /// Generates a strongly-typed object matching the provided C# type using LLM structured output.
+    /// </summary>
+    public async Task<GenerateObjectResult<T>> GenerateObjectAsync<T>(
+        string prompt,
+        string model,
+        GenerateObjectOptions? options = null,
+        CancellationToken cancellationToken = default) where T : class
+    {
+        // Get or generate schema from type
+        var schema = _schemaCache.GetOrAdd(typeof(T), type =>
+        {
+            var schemaObj = SchemaGenerator.GenerateSchema(type);
+            var schemaJson = JsonSerializer.Serialize(schemaObj, _jsonOptions);
+            return JsonSerializer.Deserialize<JsonElement>(schemaJson);
+        });
+
+        // Call the existing untyped method
+        var result = await GenerateObjectAsync(schema, prompt, model, options, cancellationToken);
+
+        // Deserialize to typed object
+        var typedObject = JsonSerializer.Deserialize<T>(result.Object.GetRawText(), _jsonOptions);
+
+        if (typedObject == null)
+        {
+            throw new OpenRouterException("Failed to deserialize generated object to target type");
+        }
+
+        return new GenerateObjectResult<T>
+        {
+            Object = typedObject,
+            Usage = result.Usage,
+            FinishReason = result.FinishReason
+        };
     }
 
     private void ValidateJsonAgainstSchema(JsonElement schema, JsonElement generatedObject)

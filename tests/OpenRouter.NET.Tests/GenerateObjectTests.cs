@@ -313,4 +313,162 @@ public class GenerateObjectTests
             );
         });
     }
+
+    // Typed API tests
+
+    public class Person
+    {
+        public string Name { get; set; } = string.Empty;
+        public int Age { get; set; }
+    }
+
+    public class TaskInfo
+    {
+        public string Title { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+
+    public enum Priority
+    {
+        Low,
+        Medium,
+        High
+    }
+
+    public class TodoItem
+    {
+        public string Title { get; set; } = string.Empty;
+        public Priority Priority { get; set; }
+        public bool Completed { get; set; }
+    }
+
+    public class TranslationResult
+    {
+        public List<Translation> Translations { get; set; } = new List<Translation>();
+    }
+
+    public class Translation
+    {
+        public string Language { get; set; } = string.Empty;
+        public string LanguageCode { get; set; } = string.Empty;
+        public string TranslatedText { get; set; } = string.Empty;
+    }
+
+    [Fact]
+    public async Task GenerateObjectAsync_Typed_WithSimpleClass_ReturnsTypedObject()
+    {
+        var apiKey = GetApiKey();
+        var client = new OpenRouterClient(apiKey);
+
+        var result = await client.GenerateObjectAsync<Person>(
+            prompt: "Generate information about a person named Jane Doe who is 25 years old",
+            model: "openai/gpt-4o-mini"
+        );
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Object);
+        Assert.NotNull(result.Object.Name);
+        Assert.True(result.Object.Age > 0);
+    }
+
+    [Fact]
+    public async Task GenerateObjectAsync_Typed_WithEnum_ReturnsObjectWithValidEnum()
+    {
+        var apiKey = GetApiKey();
+        var client = new OpenRouterClient(apiKey);
+
+        var result = await client.GenerateObjectAsync<TodoItem>(
+            prompt: "Create a high priority todo item for 'Complete project documentation'",
+            model: "openai/gpt-4o-mini"
+        );
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Object);
+        Assert.NotEmpty(result.Object.Title);
+        Assert.True(Enum.IsDefined(typeof(Priority), result.Object.Priority));
+    }
+
+    [Fact]
+    public async Task GenerateObjectAsync_Typed_WithArray_ReturnsObjectWithList()
+    {
+        var apiKey = GetApiKey();
+        var client = new OpenRouterClient(apiKey);
+
+        var result = await client.GenerateObjectAsync<TranslationResult>(
+            prompt: "Translate 'Hello World' into Spanish, French, and German",
+            model: "openai/gpt-4o-mini"
+        );
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Object);
+        Assert.NotNull(result.Object.Translations);
+        Assert.True(result.Object.Translations.Count >= 3);
+
+        foreach (var translation in result.Object.Translations)
+        {
+            Assert.NotEmpty(translation.Language);
+            Assert.NotEmpty(translation.LanguageCode);
+            Assert.NotEmpty(translation.TranslatedText);
+        }
+    }
+
+    [Fact]
+    public async Task GenerateObjectAsync_Typed_WithCustomOptions_UsesProvidedValue()
+    {
+        var apiKey = GetApiKey();
+        var client = new OpenRouterClient(apiKey);
+
+        var result = await client.GenerateObjectAsync<Person>(
+            prompt: "Generate information about a person named Bob Smith who is 40 years old",
+            model: "openai/gpt-4o-mini",
+            options: new GenerateObjectOptions
+            {
+                Temperature = 0.0,
+                MaxTokens = 200
+            }
+        );
+
+        Assert.NotNull(result);
+        Assert.NotNull(result.Object);
+    }
+
+    [Fact]
+    public async Task GenerateObjectAsync_Typed_ReturnsUsageInformation()
+    {
+        var apiKey = GetApiKey();
+        var client = new OpenRouterClient(apiKey);
+
+        var result = await client.GenerateObjectAsync<TaskInfo>(
+            prompt: "Create a task about writing unit tests with a description",
+            model: "openai/gpt-4o-mini"
+        );
+
+        Assert.NotNull(result.Usage);
+        Assert.True(result.Usage.PromptTokens > 0);
+        Assert.True(result.Usage.CompletionTokens > 0);
+        Assert.True(result.Usage.TotalTokens > 0);
+    }
+
+    [Fact]
+    public async Task GenerateObjectAsync_Typed_CachesSchema()
+    {
+        var apiKey = GetApiKey();
+        var client = new OpenRouterClient(apiKey);
+
+        // First call - generates schema
+        var result1 = await client.GenerateObjectAsync<Person>(
+            prompt: "Generate a person named Alice, age 30",
+            model: "openai/gpt-4o-mini"
+        );
+
+        // Second call - should use cached schema
+        var result2 = await client.GenerateObjectAsync<Person>(
+            prompt: "Generate a person named Charlie, age 35",
+            model: "openai/gpt-4o-mini"
+        );
+
+        Assert.NotNull(result1.Object);
+        Assert.NotNull(result2.Object);
+        Assert.NotEqual(result1.Object.Name, result2.Object.Name);
+    }
 }
