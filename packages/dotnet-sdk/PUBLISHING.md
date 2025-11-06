@@ -59,7 +59,7 @@ This creates a `.nupkg` file in the `nupkg` directory.
 
 ```bash
 dotnet nuget push ./nupkg/OpenRouter.NET.0.3.2.nupkg \
-  --api-key YOUR_API_KEY \
+  --api-key xxx \
   --source https://api.nuget.org/v3/index.json
 ```
 
