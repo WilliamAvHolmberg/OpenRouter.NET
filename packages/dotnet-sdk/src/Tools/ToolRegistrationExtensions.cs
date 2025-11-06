@@ -64,6 +64,87 @@ public static class ToolRegistrationExtensions
         client.RegisterTool(toolName, null, description, parametersSchema, ToolMode.ClientSide);
         return client;
     }
+
+    /// <summary>
+    /// Register a strongly-typed tool using the class-based Tool&lt;TParams, TResult&gt; pattern.
+    /// </summary>
+    /// <typeparam name="T">The tool class that inherits from Tool&lt;TParams, TResult&gt;</typeparam>
+    public static OpenRouterClient RegisterTool<T>(this OpenRouterClient client) where T : new()
+    {
+        var instance = new T();
+
+        // Use reflection to find if this is a Tool<TParams, TResult>
+        var baseType = typeof(T).BaseType;
+        while (baseType != null && baseType != typeof(object))
+        {
+            if (baseType.IsGenericType &&
+                baseType.GetGenericTypeDefinition() == typeof(Tool<,>))
+            {
+                // Found Tool<TParams, TResult>
+                var genericArgs = baseType.GetGenericArguments();
+                var paramsType = genericArgs[0];
+                var resultType = genericArgs[1];
+
+                // Get tool metadata
+                var nameProperty = typeof(T).GetProperty("Name");
+                var descriptionProperty = typeof(T).GetProperty("Description");
+                var modeProperty = typeof(T).GetProperty("Mode");
+
+                var toolName = (string)nameProperty!.GetValue(instance)!;
+                var description = (string)descriptionProperty!.GetValue(instance)!;
+                var mode = (ToolMode)modeProperty!.GetValue(instance)!;
+
+                // Generate schema from TParams
+                var parametersSchema = SchemaGenerator.GenerateSchema(paramsType);
+
+                // Create implementation wrapper
+                Func<string, object> implementation = (argsJson) =>
+                {
+                    try
+                    {
+                        // Call the internal ExecuteJson method
+                        var executeMethod = baseType.GetMethod("ExecuteJson",
+                            BindingFlags.NonPublic | BindingFlags.Instance);
+
+                        var jsonOptions = new JsonSerializerOptions
+                        {
+                            PropertyNameCaseInsensitive = true,
+                            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                        };
+
+                        var resultJson = (string)executeMethod!.Invoke(instance, new object[] { argsJson, jsonOptions })!;
+
+                        // If result is VoidResult, return simple success message
+                        if (resultType == typeof(VoidResult))
+                        {
+                            return "Success";
+                        }
+
+                        // Parse and return the result
+                        var result = JsonSerializer.Deserialize<object>(resultJson, jsonOptions);
+                        return result!;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (ex is TargetInvocationException targetEx && targetEx.InnerException != null)
+                        {
+                            ex = targetEx.InnerException;
+                        }
+
+                        return $"Error executing tool: {ex.Message}";
+                    }
+                };
+
+                client.RegisterTool(toolName, implementation, description, parametersSchema, mode);
+                return client;
+            }
+
+            baseType = baseType.BaseType;
+        }
+
+        throw new InvalidOperationException(
+            $"Type '{typeof(T).Name}' does not inherit from Tool<TParams, TResult>");
+    }
     
     private static OpenRouterClient RegisterToolInternal(
         OpenRouterClient client,

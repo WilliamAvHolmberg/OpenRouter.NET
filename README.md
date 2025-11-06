@@ -1,10 +1,62 @@
 # OpenRouter.NET
 
-A modern .NET SDK for the OpenRouter API - providing a unified interface to access multiple LLM providers with streaming support, tool calling, artifacts, and **structured object generation**.
+A modern .NET SDK for the OpenRouter API - providing a unified interface to access multiple LLM providers with streaming support, **fully-typed tools**, **typed structured outputs**, artifacts, and a **React SDK**.
 
-## 🆕 Generate Object - Get Structured Data from LLMs
+## ✨ Strongly-Typed Everything
 
-Generate validated, typed objects from LLMs without manual JSON parsing:
+### 1. Typed Structured Outputs (.NET)
+
+**No more JSON parsing hell.** Get fully-typed objects from LLMs:
+
+```csharp
+public class BugAnalysis
+{
+    public string Title { get; set; }
+    public Severity Severity { get; set; }  // Enum!
+    public List<string> AffectedComponents { get; set; }
+}
+
+var analysis = await client.GenerateObjectAsync<BugAnalysis>(
+    prompt: "Analyze this bug: Database connection timeout",
+    model: "anthropic/claude-sonnet-4.5"
+);
+
+// Clean, typed access - no JsonElement.TryGetProperty() mess!
+Console.WriteLine(analysis.Object.Title);
+Console.WriteLine(analysis.Object.Severity); // Actual enum value
+```
+
+### 2. Typed Tools (.NET)
+
+**One-line registration.** Full type safety on inputs AND outputs:
+
+```csharp
+public class SearchParams
+{
+    public string Query { get; set; }
+    public int MaxResults { get; set; } = 10;
+}
+
+public class SearchTool : Tool<SearchParams, SearchResult>
+{
+    public override string Name => "search";
+
+    protected override SearchResult Handle(SearchParams p)
+    {
+        // p.Query, p.MaxResults - fully typed!
+        return new SearchResult { Items = DoSearch(p.Query) };
+    }
+}
+
+// One line to register!
+client.RegisterTool<SearchTool>();
+```
+
+**No other .NET LLM SDK has this.** Full type safety + automatic schema generation + circular reference protection.
+
+### 3. React SDK with Zod Schemas
+
+Typed structured outputs for React/Next.js:
 
 ```typescript
 import { z } from 'zod';
@@ -36,10 +88,12 @@ const { object } = useGenerateObject({
 📦 Lightweight with minimal dependencies
 🎯 Built for .NET 9.0+
 🔄 Full streaming support
-🛠️ Tool calling (server-side auto-execute and client-side modes)
+✨ **Fully-typed tool system** (inputs + outputs + auto schema)
+✨ **Strongly-typed structured outputs** (no JSON parsing)
+⚛️ **React SDK** with Zod validation
 📄 Artifact support with incremental parsing
 ⚡ Async enumerable streaming (IAsyncEnumerable)
-✨ **NEW: Structured object generation with Zod schemas**
+🛡️ Circular reference protection in schema generation
 
 ## Installation
 

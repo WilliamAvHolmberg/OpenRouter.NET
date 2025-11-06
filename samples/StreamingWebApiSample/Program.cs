@@ -64,22 +64,19 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
 {
     var client = new OpenRouterClient(apiKey);
 
-    var calculator = new CalculatorTools();
-    var orderClientTools = new OrderClientTools();
-
     // Check for API keys and register tools accordingly
     var tavilyApiKey = Environment.GetEnvironmentVariable("TAVILY_API_KEY");
     var githubToken = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
 
-    // Always register calculator tools
+    // ✨ Typed tools - one-line registration!
     client
-        .RegisterTool(calculator, nameof(calculator.Add))
-        .RegisterTool(calculator, nameof(calculator.Subtract))
-        .RegisterTool(calculator, nameof(calculator.Multiply))
-        .RegisterTool(calculator, nameof(calculator.Divide));
+        .RegisterTool<AddTool>()
+        .RegisterTool<SubtractTool>()
+        .RegisterTool<MultiplyTool>()
+        .RegisterTool<DivideTool>();
 
-    // Register client-side tool for Orders filtering (emits tool_client SSE)
-    client.RegisterTool(orderClientTools, nameof(orderClientTools.SetOrderFilters), ToolMode.ClientSide);
+    // ✨ Typed client-side tool (emits tool_client SSE)
+    client.RegisterTool<SetOrderFiltersTool>();
 
     // Register GitHub search if token is available
     if (!string.IsNullOrEmpty(githubToken))
@@ -169,12 +166,11 @@ app.MapPost("/api/dashboard/stream", async (DashboardChatRequest chatRequest, Ht
 {
     var client = new OpenRouterClient(apiKey);
 
-    var dashboardTools = new DashboardTools();
-
+    // ✨ Typed client-side tools for dashboard widgets
     client
-        .RegisterTool(dashboardTools, nameof(dashboardTools.AddWidgetToDashboard), ToolMode.ClientSide)
-        .RegisterTool(dashboardTools, nameof(dashboardTools.UpdateWidget), ToolMode.ClientSide)
-        .RegisterTool(dashboardTools, nameof(dashboardTools.RemoveWidget), ToolMode.ClientSide);
+        .RegisterTool<AddWidgetTool>()
+        .RegisterTool<UpdateWidgetTool>()
+        .RegisterTool<RemoveWidgetTool>();
 
     var conversationId = chatRequest.ConversationId ?? Guid.NewGuid().ToString();
     var history = dashboardConversationStore.GetOrAdd(conversationId, _ => new List<Message>());
@@ -372,7 +368,7 @@ Then call: add_widget_to_dashboard(artifactId=""chart-products-r8t2y"", ...)
 
     var request = new ChatCompletionRequest
     {
-        Model = "anthropic/claude-sonnet-4.5",
+        Model = "anthropic/claude-haiku-4.5",
         Messages = history
     };
 
@@ -454,6 +450,30 @@ app.MapPost("/api/triage-bug", async (BugReportRequest request) =>
     });
 })
 .WithName("TriageBug");
+
+// ✨ Demo of typed tools - clean, type-safe tool registration
+app.MapGet("/api/demo-typed-tools", async (HttpContext context) =>
+{
+    var client = new OpenRouterClient(apiKey);
+
+    // One-line registration for each typed tool!
+    client.RegisterTool<CalculateTool>();
+    client.RegisterTool<SearchTool>();
+    client.RegisterTool<NotifyTool>();
+
+    var request = new ChatCompletionRequest
+    {
+        Model = "anthropic/claude-sonnet-4.5",
+        Messages = new List<Message>
+        {
+            Message.FromUser("Calculate 42 * 137, then search for 'typed tools', and notify me about the result")
+        }
+    };
+
+    // Stream the response with typed tools!
+    await client.StreamAsSseAsync(request, context.Response);
+})
+.WithName("DemoTypedTools");
 
 app.MapDelete("/api/dashboard/conversation/{conversationId}", (string conversationId) =>
 {
@@ -544,6 +564,55 @@ public class CalculatorTools
     }
 }
 
+// ✨ Typed Dashboard Tools - Client-side
+
+public class AddWidgetParams
+{
+    public string ArtifactId { get; set; } = string.Empty;
+    public string WidgetId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Size { get; set; } = "medium";
+}
+
+public class AddWidgetTool : VoidTool<AddWidgetParams>
+{
+    public override string Name => "add_widget_to_dashboard";
+    public override string Description => "Add a new widget to the dashboard canvas. You must specify the artifactId of the tsx.reactrunner artifact that contains the widget code.";
+    public override ToolMode Mode => ToolMode.ClientSide;
+
+    protected override void HandleVoid(AddWidgetParams p) { }
+}
+
+public class UpdateWidgetParams
+{
+    public string WidgetId { get; set; } = string.Empty;
+    public string? Title { get; set; }
+}
+
+public class UpdateWidgetTool : VoidTool<UpdateWidgetParams>
+{
+    public override string Name => "update_widget";
+    public override string Description => "Update an existing widget on the dashboard";
+    public override ToolMode Mode => ToolMode.ClientSide;
+
+    protected override void HandleVoid(UpdateWidgetParams p) { }
+}
+
+public class RemoveWidgetParams
+{
+    public string WidgetId { get; set; } = string.Empty;
+}
+
+public class RemoveWidgetTool : VoidTool<RemoveWidgetParams>
+{
+    public override string Name => "remove_widget";
+    public override string Description => "Remove a widget from the dashboard";
+    public override ToolMode Mode => ToolMode.ClientSide;
+
+    protected override void HandleVoid(RemoveWidgetParams p) { }
+}
+
+// Legacy method-based version (kept for reference)
 public class DashboardTools
 {
     [ToolMethod("Add a new widget to the dashboard canvas. You must specify the artifactId of the tsx.reactrunner artifact that contains the widget code.")]

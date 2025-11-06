@@ -1,8 +1,23 @@
 using System.Text.Json.Serialization;
+using OpenRouter.NET.Models;
 using OpenRouter.NET.Tools;
 
 namespace StreamingWebApiSample;
 
+// Typed version
+public class SetOrderFiltersTool : VoidTool<OrderFilterArgs>
+{
+    public override string Name => "set_order_filters";
+    public override string Description => "Apply filters to the order list in the client UI";
+    public override ToolMode Mode => ToolMode.ClientSide;
+
+    protected override void HandleVoid(OrderFilterArgs filters)
+    {
+        // Client-side tool: emitted to client, not executed here
+    }
+}
+
+// Legacy method-based version (kept for reference)
 public class OrderClientTools
 {
     [ToolMethod("Apply filters to the order list in the client UI")]
