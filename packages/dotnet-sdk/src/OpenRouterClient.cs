@@ -25,6 +25,9 @@ public class OpenRouterClient
     public event EventHandler<StreamEventArgs>? OnStreamEvent;
     public static string Version => "0.1.0";
 
+    // Internal accessor for testing
+    internal ObjectGenerator ObjectGeneratorForTesting => _objectGenerator;
+
     public OpenRouterClient(string apiKey) : this(new OpenRouterClientOptions { ApiKey = apiKey })
     {
     }

@@ -8,17 +8,9 @@ public class SchemaValidationTests
 {
     private static void InvokeValidateMethod(OpenRouterClient client, JsonElement schema, JsonElement generatedObject)
     {
-        var method = typeof(OpenRouterClient).GetMethod(
-            "ValidateJsonAgainstSchema",
-            BindingFlags.NonPublic | BindingFlags.Instance
-        );
-
-        if (method == null)
-        {
-            throw new InvalidOperationException("ValidateJsonAgainstSchema method not found");
-        }
-
-        method.Invoke(client, new object[] { schema, generatedObject });
+        // Access the ObjectGenerator through the internal testing property
+        var objectGenerator = client.ObjectGeneratorForTesting;
+        objectGenerator.ValidateJsonAgainstSchema(schema, generatedObject);
     }
 
     [Fact]

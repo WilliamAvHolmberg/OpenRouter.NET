@@ -303,7 +303,8 @@ public class GenerateObjectTests
         var cts = new CancellationTokenSource();
         cts.Cancel();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        // TaskCanceledException is a subclass of OperationCanceledException
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
         {
             await client.GenerateObjectAsync(
                 schema: schema,

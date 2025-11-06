@@ -158,7 +158,7 @@ internal class ObjectGenerator
     /// <summary>
     /// Validates a JSON element against a JSON schema
     /// </summary>
-    private void ValidateJsonAgainstSchema(JsonElement schema, JsonElement generatedObject)
+    internal void ValidateJsonAgainstSchema(JsonElement schema, JsonElement generatedObject)
     {
         var schemaObj = JsonSerializer.Deserialize<JsonSchema>(schema.GetRawText());
         if (schemaObj == null)
@@ -185,7 +185,7 @@ internal class ObjectGenerator
     /// <summary>
     /// Recursively collects validation errors from evaluation results
     /// </summary>
-    private void CollectValidationErrors(EvaluationResults results, StringBuilder errors, string path)
+    internal void CollectValidationErrors(EvaluationResults results, StringBuilder errors, string path)
     {
         if (results.Errors != null)
         {

@@ -60,6 +60,7 @@ internal class StreamingHandler
         var toolCallsCount = 0;
         var hasToolCalls = false;
         var conversationHistory = request.Messages.ToList();
+        var lastElapsedTime = TimeSpan.Zero;
 
         do
         {
@@ -78,6 +79,12 @@ internal class StreamingHandler
             await foreach (var chunk in StreamAsyncInternal(request, cancellationToken))
             {
                 yield return chunk;
+
+                // Track the last elapsed time for use in tool execution chunks
+                if (chunk.ElapsedTime > lastElapsedTime)
+                {
+                    lastElapsedTime = chunk.ElapsedTime;
+                }
 
                 if (chunk.TextDelta != null)
                 {
@@ -117,7 +124,7 @@ internal class StreamingHandler
                     yield return new StreamChunk
                     {
                         IsFirstChunk = false,
-                        ElapsedTime = TimeSpan.Zero,
+                        ElapsedTime = lastElapsedTime,
                         ChunkIndex = 0,
                         TextDelta = $"\n\n[Max tool iterations ({config.MaxIterations}) reached]",
                         Raw = null!
@@ -128,8 +135,13 @@ internal class StreamingHandler
                 // Increment after the check passes
                 toolCallsCount++;
 
-                await foreach (var toolChunk in ExecuteToolCalls(completeMessage.ToolCalls, conversationHistory))
+                await foreach (var toolChunk in ExecuteToolCalls(completeMessage.ToolCalls, conversationHistory, lastElapsedTime))
                 {
+                    // Update last elapsed time if tool execution took time
+                    if (toolChunk.ElapsedTime > lastElapsedTime)
+                    {
+                        lastElapsedTime = toolChunk.ElapsedTime;
+                    }
                     yield return toolChunk;
                 }
             }
@@ -421,7 +433,8 @@ internal class StreamingHandler
     /// </summary>
     private async IAsyncEnumerable<StreamChunk> ExecuteToolCalls(
         ToolCall[] toolCalls,
-        List<Message> conversationHistory)
+        List<Message> conversationHistory,
+        TimeSpan baseElapsedTime)
     {
         foreach (var toolCall in toolCalls)
         {
@@ -436,7 +449,7 @@ internal class StreamingHandler
                 yield return new StreamChunk
                 {
                     IsFirstChunk = false,
-                    ElapsedTime = TimeSpan.Zero,
+                    ElapsedTime = baseElapsedTime,
                     ChunkIndex = 0,
                     ServerTool = new ServerToolCall
                     {
@@ -463,7 +476,7 @@ internal class StreamingHandler
                 yield return new StreamChunk
                 {
                     IsFirstChunk = false,
-                    ElapsedTime = TimeSpan.Zero,
+                    ElapsedTime = baseElapsedTime,
                     ChunkIndex = 0,
                     ClientTool = new ClientToolCall
                     {
@@ -488,7 +501,7 @@ internal class StreamingHandler
             yield return new StreamChunk
             {
                 IsFirstChunk = false,
-                ElapsedTime = TimeSpan.Zero,
+                ElapsedTime = baseElapsedTime,
                 ChunkIndex = 0,
                 ServerTool = new ServerToolCall
                 {
@@ -515,7 +528,7 @@ internal class StreamingHandler
                 resultChunk = new StreamChunk
                 {
                     IsFirstChunk = false,
-                    ElapsedTime = TimeSpan.Zero,
+                    ElapsedTime = baseElapsedTime + executionStopwatch.Elapsed,
                     ChunkIndex = 0,
                     ServerTool = new ServerToolCall
                     {
@@ -544,7 +557,7 @@ internal class StreamingHandler
                 resultChunk = new StreamChunk
                 {
                     IsFirstChunk = false,
-                    ElapsedTime = TimeSpan.Zero,
+                    ElapsedTime = baseElapsedTime + executionStopwatch.Elapsed,
                     ChunkIndex = 0,
                     ServerTool = new ServerToolCall
                     {
