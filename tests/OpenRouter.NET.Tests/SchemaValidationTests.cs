@@ -61,13 +61,11 @@ public class SchemaValidationTests
         var schema = JsonSerializer.Deserialize<JsonElement>(schemaJson);
         var obj = JsonSerializer.Deserialize<JsonElement>(objectJson);
 
-        var exception = Assert.Throws<TargetInvocationException>(() => 
+        var exception = Assert.Throws<OpenRouterException>(() =>
             InvokeValidateMethod(client, schema, obj)
         );
 
-        Assert.NotNull(exception.InnerException);
-        Assert.IsType<OpenRouterException>(exception.InnerException);
-        Assert.Contains("does not match schema", exception.InnerException.Message);
+        Assert.Contains("does not match schema", exception.Message);
     }
 
     [Fact]
@@ -92,13 +90,11 @@ public class SchemaValidationTests
         var schema = JsonSerializer.Deserialize<JsonElement>(schemaJson);
         var obj = JsonSerializer.Deserialize<JsonElement>(objectJson);
 
-        var exception = Assert.Throws<TargetInvocationException>(() => 
+        var exception = Assert.Throws<OpenRouterException>(() =>
             InvokeValidateMethod(client, schema, obj)
         );
 
-        Assert.NotNull(exception.InnerException);
-        Assert.IsType<OpenRouterException>(exception.InnerException);
-        Assert.Contains("does not match schema", exception.InnerException.Message);
+        Assert.Contains("does not match schema", exception.Message);
     }
 
     [Fact]
@@ -165,12 +161,11 @@ public class SchemaValidationTests
         var schema = JsonSerializer.Deserialize<JsonElement>(schemaJson);
         var obj = JsonSerializer.Deserialize<JsonElement>(objectJson);
 
-        var exception = Assert.Throws<TargetInvocationException>(() => 
+        var exception = Assert.Throws<OpenRouterException>(() =>
             InvokeValidateMethod(client, schema, obj)
         );
 
-        Assert.NotNull(exception.InnerException);
-        Assert.IsType<OpenRouterException>(exception.InnerException);
+        Assert.NotNull(exception);
     }
 
     [Fact]
@@ -244,12 +239,11 @@ public class SchemaValidationTests
         var schema = JsonSerializer.Deserialize<JsonElement>(schemaJson);
         var obj = JsonSerializer.Deserialize<JsonElement>(objectJson);
 
-        var exception = Assert.Throws<TargetInvocationException>(() => 
+        var exception = Assert.Throws<OpenRouterException>(() =>
             InvokeValidateMethod(client, schema, obj)
         );
 
-        Assert.NotNull(exception.InnerException);
-        Assert.IsType<OpenRouterException>(exception.InnerException);
+        Assert.NotNull(exception);
     }
 
     [Fact]
@@ -330,12 +324,11 @@ public class SchemaValidationTests
         var schema = JsonSerializer.Deserialize<JsonElement>(schemaJson);
         var obj = JsonSerializer.Deserialize<JsonElement>(objectJson);
 
-        var exception = Assert.Throws<TargetInvocationException>(() => 
+        var exception = Assert.Throws<OpenRouterException>(() =>
             InvokeValidateMethod(client, schema, obj)
         );
 
-        Assert.NotNull(exception.InnerException);
-        Assert.IsType<OpenRouterException>(exception.InnerException);
+        Assert.NotNull(exception);
     }
 
     [Fact]
