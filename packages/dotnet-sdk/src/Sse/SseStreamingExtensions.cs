@@ -28,6 +28,7 @@ public static class SseStreamingExtensions
         var writer = new SseWriter(response.Body, jsonOptions);
         var completionSent = false;
         var lastChunkIndex = 0;
+        var lastElapsedMs = 0.0;
 
         // Message accumulation
         var messages = new List<Message>();
@@ -43,6 +44,7 @@ public static class SseStreamingExtensions
             {
                 var events = SseChunkMapper.MapChunk(chunk);
                 lastChunkIndex = chunk.ChunkIndex;
+                lastElapsedMs = chunk.ElapsedTime.TotalMilliseconds;
 
                 // Accumulate text content
                 if (chunk.TextDelta != null)
@@ -196,7 +198,7 @@ public static class SseStreamingExtensions
                 {
                     Type = SseEventType.Completion,
                     ChunkIndex = lastChunkIndex + 1,
-                    ElapsedMs = 0,
+                    ElapsedMs = lastElapsedMs,
                     FinishReason = "stop"
                 };
 
@@ -227,11 +229,13 @@ public static class SseStreamingExtensions
     {
         var completionSent = false;
         var lastChunkIndex = 0;
+        var lastElapsedMs = 0.0;
 
         await foreach (var chunk in client.StreamAsync(request, cancellationToken))
         {
             var events = SseChunkMapper.MapChunk(chunk);
             lastChunkIndex = chunk.ChunkIndex;
+            lastElapsedMs = chunk.ElapsedTime.TotalMilliseconds;
 
             foreach (var sseEvent in events)
             {
@@ -251,7 +255,7 @@ public static class SseStreamingExtensions
             {
                 Type = SseEventType.Completion,
                 ChunkIndex = lastChunkIndex + 1,
-                ElapsedMs = 0,
+                ElapsedMs = lastElapsedMs,
                 FinishReason = "stop"
             };
         }
