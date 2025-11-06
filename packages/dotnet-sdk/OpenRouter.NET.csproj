@@ -17,9 +17,6 @@
     <!-- Disable XML documentation warnings -->
     <NoWarn>$(NoWarn);CS1591;CS8603</NoWarn>
 
-    <!-- Expose internals to test project -->
-    <InternalsVisibleTo>OpenRouter.NET.Tests</InternalsVisibleTo>
-
     <!-- NuGet Package Metadata -->
     <PackageId>OpenRouter.NET</PackageId>
     <Version>0.5.0</Version>
@@ -37,6 +34,10 @@
 
   <ItemGroup>
     <Compile Include="src/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="OpenRouter.NET.Tests" />
   </ItemGroup>
 
   <ItemGroup>
