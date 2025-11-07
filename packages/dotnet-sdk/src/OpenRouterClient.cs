@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -5,6 +6,7 @@ using System.Text.Json.Serialization;
 using OpenRouter.NET.Events;
 using OpenRouter.NET.Internal;
 using OpenRouter.NET.Models;
+using OpenRouter.NET.Observability;
 using OpenRouter.NET.Tools;
 
 namespace OpenRouter.NET;
@@ -15,6 +17,7 @@ public class OpenRouterClient
     private readonly bool _disposeHttpClient;
     private readonly Action<string>? _logCallback;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly OpenRouterTelemetryOptions _telemetryOptions;
 
     // Handler classes for specialized functionality
     private readonly HttpRequestHandler _httpHandler;
@@ -40,6 +43,7 @@ public class OpenRouterClient
         }
 
         _logCallback = options.OnLogMessage;
+        _telemetryOptions = options.Telemetry ?? OpenRouterTelemetryOptions.Default;
 
         if (options.HttpClient != null)
         {
@@ -66,11 +70,12 @@ public class OpenRouterClient
             options.BaseUrl,
             options.SiteUrl,
             options.SiteName,
-            _jsonOptions);
+            _jsonOptions,
+            _telemetryOptions);
 
-        _toolManager = new ToolManager(_jsonOptions);
-        _streamingHandler = new StreamingHandler(_httpHandler, _toolManager, _logCallback);
-        _objectGenerator = new ObjectGenerator(CreateChatCompletionAsync, _jsonOptions, _logCallback);
+        _toolManager = new ToolManager(_jsonOptions, _telemetryOptions);
+        _streamingHandler = new StreamingHandler(_httpHandler, _toolManager, _logCallback, _telemetryOptions);
+        _objectGenerator = new ObjectGenerator(CreateChatCompletionAsync, _jsonOptions, _logCallback, _telemetryOptions);
     }
 
     public OpenRouterClient RegisterTool(
@@ -97,48 +102,93 @@ public class OpenRouterClient
     {
         if (request == null) throw new ArgumentNullException(nameof(request));
 
-        if (_toolManager.ToolCount > 0 && request.Tools == null)
-        {
-            request.Tools = _toolManager.GetAllTools();
-        }
-
-        // Apply default reasoning: lowest effort and excluded, if not specified
-        if (request.Reasoning == null)
-        {
-            request.Reasoning = new Models.ReasoningConfig
-            {
-                Effort = "low",
-                Exclude = true,
-                Enabled = true
-            };
-        }
-
-        var requestContent = JsonSerializer.Serialize(request, _jsonOptions);
-
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_httpHandler.BaseUrl}/chat/completions")
-        {
-            Content = new StringContent(requestContent, Encoding.UTF8, "application/json")
-        };
-
-        _httpHandler.AddHeaders(httpRequest);
-
-        var response = await _httpHandler.HttpClient.SendAsync(httpRequest, cancellationToken);
-        var responseContent = await response.Content.ReadAsStringAsync();
-
-        Log($"OpenRouter API Response: {responseContent}");
-
-        await _httpHandler.HandleErrorResponse(response);
+        // Start telemetry span if enabled
+        using var activity = _telemetryOptions.EnableTelemetry
+            ? OpenRouterActivitySource.Instance.StartActivity(GenAiSemanticConventions.SpanNameChat, ActivityKind.Client)
+            : null;
 
         try
         {
-            var result = JsonSerializer.Deserialize<ChatCompletionResponse>(responseContent, _jsonOptions)!;
-            Log($"Deserialized response - Choices count: {result?.Choices?.Count ?? 0}");
-            return result;
+            if (_toolManager.ToolCount > 0 && request.Tools == null)
+            {
+                request.Tools = _toolManager.GetAllTools();
+            }
+
+            // Apply default reasoning: lowest effort and excluded, if not specified
+            if (request.Reasoning == null)
+            {
+                request.Reasoning = new Models.ReasoningConfig
+                {
+                    Effort = "low",
+                    Exclude = true,
+                    Enabled = true
+                };
+            }
+
+            var requestContent = JsonSerializer.Serialize(request, _jsonOptions);
+
+            // Enrich activity with request attributes
+            if (activity != null)
+            {
+                activity.SetTag(GenAiSemanticConventions.AttributeOperationName, GenAiSemanticConventions.OperationChat);
+                TelemetryHelper.EnrichWithRequest(activity, request, requestContent, _telemetryOptions);
+            }
+
+            using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_httpHandler.BaseUrl}/chat/completions")
+            {
+                Content = new StringContent(requestContent, Encoding.UTF8, "application/json")
+            };
+
+            _httpHandler.AddHeaders(httpRequest);
+
+            var response = await _httpHandler.HttpClient.SendAsync(httpRequest, cancellationToken);
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            Log($"OpenRouter API Response: {responseContent}");
+
+            // Enrich activity with HTTP-level attributes
+            if (activity != null)
+            {
+                TelemetryHelper.EnrichWithHttp(
+                    activity,
+                    "POST",
+                    $"{_httpHandler.BaseUrl}/chat/completions",
+                    (int)response.StatusCode);
+            }
+
+            await _httpHandler.HandleErrorResponse(response);
+
+            try
+            {
+                var result = JsonSerializer.Deserialize<ChatCompletionResponse>(responseContent, _jsonOptions)!;
+                Log($"Deserialized response - Choices count: {result?.Choices?.Count ?? 0}");
+
+                // Enrich activity with response attributes
+                if (activity != null)
+                {
+                    TelemetryHelper.EnrichWithResponse(activity, result, responseContent, _telemetryOptions);
+                    activity.SetStatus(ActivityStatusCode.Ok);
+                }
+
+                return result;
+            }
+            catch (JsonException ex)
+            {
+                Log($"JSON parsing error: {ex.Message}");
+                if (activity != null)
+                {
+                    TelemetryHelper.RecordException(activity, ex);
+                }
+                throw new OpenRouterException($"Failed to parse OpenRouter API response: {ex.Message}. Response content: '{responseContent}'", ex);
+            }
         }
-        catch (JsonException ex)
+        catch (Exception ex)
         {
-            Log($"JSON parsing error: {ex.Message}");
-            throw new OpenRouterException($"Failed to parse OpenRouter API response: {ex.Message}. Response content: '{responseContent}'", ex);
+            if (activity != null)
+            {
+                TelemetryHelper.RecordException(activity, ex);
+            }
+            throw;
         }
     }
 

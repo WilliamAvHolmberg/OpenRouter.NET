@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using OpenRouter.NET.Models;
+using OpenRouter.NET.Observability;
 
 namespace OpenRouter.NET.Internal;
 
@@ -15,6 +16,7 @@ internal class HttpRequestHandler
     private readonly string? _siteName;
     private readonly string _baseUrl;
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly OpenRouterTelemetryOptions _telemetryOptions;
 
     public HttpRequestHandler(
         HttpClient httpClient,
@@ -22,7 +24,8 @@ internal class HttpRequestHandler
         string baseUrl,
         string? siteUrl,
         string? siteName,
-        JsonSerializerOptions jsonOptions)
+        JsonSerializerOptions jsonOptions,
+        OpenRouterTelemetryOptions telemetryOptions)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _apiKey = apiKey ?? throw new ArgumentNullException(nameof(apiKey));
@@ -30,6 +33,7 @@ internal class HttpRequestHandler
         _siteUrl = siteUrl;
         _siteName = siteName;
         _jsonOptions = jsonOptions ?? throw new ArgumentNullException(nameof(jsonOptions));
+        _telemetryOptions = telemetryOptions ?? throw new ArgumentNullException(nameof(telemetryOptions));
     }
 
     /// <summary>

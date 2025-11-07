@@ -1,6 +1,8 @@
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using OpenRouter.NET.Models;
+using OpenRouter.NET.Observability;
 using OpenRouter.NET.Parsing;
 using OpenRouter.NET.Streaming;
 using OpenRouter.NET.Tools;
@@ -15,15 +17,18 @@ internal class StreamingHandler
     private readonly HttpRequestHandler _httpHandler;
     private readonly ToolManager _toolManager;
     private readonly Action<string>? _logCallback;
+    private readonly OpenRouterTelemetryOptions _telemetryOptions;
 
     public StreamingHandler(
         HttpRequestHandler httpHandler,
         ToolManager toolManager,
-        Action<string>? logCallback = null)
+        Action<string>? logCallback = null,
+        OpenRouterTelemetryOptions? telemetryOptions = null)
     {
         _httpHandler = httpHandler ?? throw new ArgumentNullException(nameof(httpHandler));
         _toolManager = toolManager ?? throw new ArgumentNullException(nameof(toolManager));
         _logCallback = logCallback;
+        _telemetryOptions = telemetryOptions ?? OpenRouterTelemetryOptions.Default;
     }
 
     /// <summary>
