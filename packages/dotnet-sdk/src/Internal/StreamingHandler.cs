@@ -45,26 +45,24 @@ internal class StreamingHandler
             ? OpenRouterActivitySource.Instance.StartActivity(GenAiSemanticConventions.SpanNameStream, ActivityKind.Client)
             : null;
 
-        try
+        if (activity != null)
         {
-            if (activity != null)
+            activity.SetTag(GenAiSemanticConventions.AttributeOperationName, GenAiSemanticConventions.OperationStream);
+            activity.SetTag(GenAiSemanticConventions.AttributeSystem, GenAiSemanticConventions.SystemValue);
+            activity.SetTag(GenAiSemanticConventions.AttributeServerAddress, GenAiSemanticConventions.ServerAddressValue);
+
+            if (!string.IsNullOrEmpty(request.Model))
             {
-                activity.SetTag(GenAiSemanticConventions.AttributeOperationName, GenAiSemanticConventions.OperationStream);
-                activity.SetTag(GenAiSemanticConventions.AttributeSystem, GenAiSemanticConventions.SystemValue);
-                activity.SetTag(GenAiSemanticConventions.AttributeServerAddress, GenAiSemanticConventions.ServerAddressValue);
-
-                if (!string.IsNullOrEmpty(request.Model))
-                {
-                    activity.SetTag(GenAiSemanticConventions.AttributeRequestModel, request.Model);
-                }
-
-                // Capture prompts if enabled
-                if (_telemetryOptions.CapturePrompts && request.Messages?.Count > 0)
-                {
-                    var requestJson = System.Text.Json.JsonSerializer.Serialize(request, _httpHandler.JsonOptions);
-                    TelemetryHelper.EnrichWithRequest(activity, request, requestJson, _telemetryOptions);
-                }
+                activity.SetTag(GenAiSemanticConventions.AttributeRequestModel, request.Model);
             }
+
+            // Capture prompts if enabled
+            if (_telemetryOptions.CapturePrompts && request.Messages?.Count > 0)
+            {
+                var requestJson = System.Text.Json.JsonSerializer.Serialize(request, _httpHandler.JsonOptions);
+                TelemetryHelper.EnrichWithRequest(activity, request, requestJson, _telemetryOptions);
+            }
+        }
 
         var config = request.ToolLoopConfig ?? new ToolLoopConfig { Enabled = true, MaxIterations = 5 };
 
@@ -182,15 +180,6 @@ internal class StreamingHandler
             }
 
         } while (hasToolCalls && toolCallsCount < config.MaxIterations);
-        }
-        catch (Exception ex)
-        {
-            if (activity != null)
-            {
-                TelemetryHelper.RecordException(activity, ex);
-            }
-            throw;
-        }
     }
 
     /// <summary>

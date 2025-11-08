@@ -50,8 +50,8 @@
 
   <ItemGroup>
     <PackageReference Include="JsonSchema.Net" Version="7.4.0" />
-    <PackageReference Include="OpenTelemetry.Api" Version="1.10.0" />
-    <PackageReference Include="OpenTelemetry" Version="1.10.0" />
+    <PackageReference Include="OpenTelemetry.Api" Version="1.11.0" />
+    <PackageReference Include="OpenTelemetry" Version="1.11.0" />
     <PackageReference Include="System.Diagnostics.DiagnosticSource" Version="9.0.0" />
   </ItemGroup>
 
