@@ -9,10 +9,11 @@ using OpenRouter.NET.Artifacts;
 using System.Text.Json;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using OpenTelemetry.Exporter;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ✨ Configure OpenTelemetry with Console Exporter for observability
+// ✨ Configure OpenTelemetry with Phoenix OTLP Exporter
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
         .AddService("openrouter-streaming-api")
@@ -26,7 +27,11 @@ builder.Services.AddOpenTelemetry()
             .AddAspNetCoreInstrumentation()     // HTTP requests
             .AddHttpClientInstrumentation()     // Outgoing HTTP
             .AddOpenRouterInstrumentation()     // 🎯 OpenRouter LLM calls
-            .AddConsoleExporter();              // Output traces to console
+            .AddOtlpExporter(options =>         // 🔥 Send to Phoenix!
+            {
+                options.Endpoint = new Uri("http://localhost:4317");
+                options.Protocol = OtlpExportProtocol.Grpc;
+            });
     });
 
 builder.Services.AddOpenApi();
