@@ -34,11 +34,11 @@ builder.Services.AddOpenTelemetry()
             .AddHttpClientInstrumentation()     // Outgoing HTTP
             .AddOpenRouterInstrumentation()     // 🎯 OpenRouter LLM calls
             .AddConsoleExporter()               // 🔍 Debug: Console output
-            .AddOtlpExporter(options =>         // 🔥 Send to Phoenix!
+            .AddOtlpExporter(options =>         // 🔥 Send to Phoenix via HTTP!
             {
-                // For gRPC, don't use http:// scheme - just the host:port
-                options.Endpoint = new Uri("http://localhost:4317");
-                options.Protocol = OtlpExportProtocol.Grpc;
+                // Use HTTP endpoint instead of gRPC - more reliable
+                options.Endpoint = new Uri("http://localhost:6006/v1/traces");
+                options.Protocol = OtlpExportProtocol.HttpProtobuf;
             });
     });
 
