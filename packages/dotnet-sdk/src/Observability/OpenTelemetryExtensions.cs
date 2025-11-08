@@ -38,6 +38,11 @@ public static class OpenTelemetryExtensions
         return builder.AddSource(OpenRouterActivitySource.SourceName);
     }
 
+    private static ActivitySamplingResult DefaultSample(ref ActivityCreationOptions<ActivityContext> _)
+    {
+        return ActivitySamplingResult.AllDataAndRecorded;
+    }
+
     /// <summary>
     /// Creates an ActivityListener that listens to OpenRouter.NET telemetry.
     /// Use this for manual subscription without OpenTelemetry SDK.
@@ -57,14 +62,14 @@ public static class OpenTelemetryExtensions
     /// </code>
     /// </example>
     public static ActivityListener CreateOpenRouterActivityListener(
-        Func<ActivityCreationOptions<ActivityContext>, ActivitySamplingResult>? sample = null,
+        SampleActivity<ActivityContext>? sample = null,
         Action<Activity>? activityStarted = null,
         Action<Activity>? activityStopped = null)
     {
         var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == OpenRouterActivitySource.SourceName,
-            Sample = sample ?? ((ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded),
+            Sample = sample ?? DefaultSample,
             ActivityStarted = activityStarted,
             ActivityStopped = activityStopped
         };

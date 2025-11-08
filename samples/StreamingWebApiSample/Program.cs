@@ -75,6 +75,14 @@ if (string.IsNullOrEmpty(apiKey))
     return;
 }
 
+var telemetryOptions = new OpenRouterTelemetryOptions
+{
+    EnableTelemetry = true,
+    CapturePrompts = true,
+    CaptureCompletions = true,
+    CaptureToolDetails = true
+};
+
 var conversationStore = new ConcurrentDictionary<string, List<Message>>();
 var dashboardConversationStore = new ConcurrentDictionary<string, List<Message>>();
 
