@@ -40,6 +40,32 @@ internal class StreamingHandler
     {
         if (request == null) throw new ArgumentNullException(nameof(request));
 
+        // Start telemetry span if enabled
+        using var activity = _telemetryOptions.EnableTelemetry
+            ? OpenRouterActivitySource.Instance.StartActivity(GenAiSemanticConventions.SpanNameStream, ActivityKind.Client)
+            : null;
+
+        try
+        {
+            if (activity != null)
+            {
+                activity.SetTag(GenAiSemanticConventions.AttributeOperationName, GenAiSemanticConventions.OperationStream);
+                activity.SetTag(GenAiSemanticConventions.AttributeSystem, GenAiSemanticConventions.SystemValue);
+                activity.SetTag(GenAiSemanticConventions.AttributeServerAddress, GenAiSemanticConventions.ServerAddressValue);
+
+                if (!string.IsNullOrEmpty(request.Model))
+                {
+                    activity.SetTag(GenAiSemanticConventions.AttributeRequestModel, request.Model);
+                }
+
+                // Capture prompts if enabled
+                if (_telemetryOptions.CapturePrompts && request.Messages?.Count > 0)
+                {
+                    var requestJson = System.Text.Json.JsonSerializer.Serialize(request, _httpHandler.JsonOptions);
+                    TelemetryHelper.EnrichWithRequest(activity, request, requestJson, _telemetryOptions);
+                }
+            }
+
         var config = request.ToolLoopConfig ?? new ToolLoopConfig { Enabled = true, MaxIterations = 5 };
 
         if (!config.Enabled || _toolManager.ToolCount == 0)
@@ -156,6 +182,15 @@ internal class StreamingHandler
             }
 
         } while (hasToolCalls && toolCallsCount < config.MaxIterations);
+        }
+        catch (Exception ex)
+        {
+            if (activity != null)
+            {
+                TelemetryHelper.RecordException(activity, ex);
+            }
+            throw;
+        }
     }
 
     /// <summary>
@@ -176,6 +211,9 @@ internal class StreamingHandler
 
         var requestContent = JsonSerializer.Serialize(request, _httpHandler.JsonOptions);
 
+        // Get current activity for enrichment
+        var currentActivity = Activity.Current;
+
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, $"{_httpHandler.BaseUrl}/chat/completions")
         {
             Content = new StringContent(requestContent, Encoding.UTF8, "application/json")
@@ -193,6 +231,14 @@ internal class StreamingHandler
         var chunkIndex = 0;
         var isFirstChunk = true;
         var artifactParser = new ArtifactParser();
+
+        // Telemetry tracking
+        long? timeToFirstTokenMs = null;
+        int totalChunks = 0;
+        string? finishReason = null;
+        string? responseModel = null;
+        int? inputTokens = null;
+        int? outputTokens = null;
 
         string? line;
         while ((line = await reader.ReadLineAsync()) != null && !cancellationToken.IsCancellationRequested)
@@ -250,8 +296,89 @@ internal class StreamingHandler
 
             foreach (var chunkToYield in chunksToYield)
             {
+                // Telemetry tracking
+                if (_telemetryOptions.EnableTelemetry && currentActivity != null)
+                {
+                    totalChunks++;
+
+                    // Capture time to first token
+                    if (!timeToFirstTokenMs.HasValue && chunkToYield.IsFirstChunk && stopwatch != null)
+                    {
+                        timeToFirstTokenMs = (long)stopwatch.Elapsed.TotalMilliseconds;
+                    }
+
+                    // Capture completion metadata
+                    if (chunkToYield.Completion != null)
+                    {
+                        finishReason = chunkToYield.Completion.FinishReason;
+                        responseModel = chunkToYield.Completion.Model;
+                    }
+
+                    // Capture usage
+                    if (chunkToYield.Raw?.Usage != null)
+                    {
+                        inputTokens = chunkToYield.Raw.Usage.PromptTokens;
+                        outputTokens = chunkToYield.Raw.Usage.CompletionTokens;
+                    }
+
+                    // Optionally log stream chunks
+                    if (_telemetryOptions.CaptureStreamChunks && !string.IsNullOrEmpty(chunkToYield.TextDelta))
+                    {
+                        currentActivity.AddEvent(new ActivityEvent(GenAiSemanticConventions.EventStreamChunk,
+                            tags: new ActivityTagsCollection
+                            {
+                                { "chunk_index", totalChunks },
+                                { "text_delta", chunkToYield.TextDelta },
+                                { "elapsed_ms", (long)chunkToYield.ElapsedTime.TotalMilliseconds }
+                            }));
+                    }
+                }
+
                 yield return chunkToYield;
             }
+        }
+
+        // Enrich activity with final streaming metrics
+        if (_telemetryOptions.EnableTelemetry && currentActivity != null && stopwatch != null)
+        {
+            var durationMs = (long)stopwatch.Elapsed.TotalMilliseconds;
+
+            if (timeToFirstTokenMs.HasValue)
+            {
+                currentActivity.SetTag(GenAiSemanticConventions.AttributeStreamTimeToFirstToken, timeToFirstTokenMs.Value);
+            }
+
+            currentActivity.SetTag(GenAiSemanticConventions.AttributeStreamTotalChunks, totalChunks);
+            currentActivity.SetTag(GenAiSemanticConventions.AttributeStreamDuration, durationMs);
+
+            if (outputTokens.HasValue && durationMs > 0)
+            {
+                var tokensPerSecond = (outputTokens.Value / (durationMs / 1000.0));
+                currentActivity.SetTag(GenAiSemanticConventions.AttributeStreamTokensPerSecond, tokensPerSecond);
+            }
+
+            if (!string.IsNullOrEmpty(finishReason))
+            {
+                currentActivity.SetTag(GenAiSemanticConventions.AttributeStreamFinishReason, finishReason);
+            }
+
+            if (!string.IsNullOrEmpty(responseModel))
+            {
+                currentActivity.SetTag(GenAiSemanticConventions.AttributeResponseModel, responseModel);
+            }
+
+            if (inputTokens.HasValue)
+            {
+                currentActivity.SetTag(GenAiSemanticConventions.AttributeUsageInputTokens, inputTokens.Value);
+            }
+
+            if (outputTokens.HasValue)
+            {
+                currentActivity.SetTag(GenAiSemanticConventions.AttributeUsageOutputTokens, outputTokens.Value);
+            }
+
+            currentActivity.SetTag(GenAiSemanticConventions.AttributeHttpStatusCode, 200);
+            currentActivity.SetStatus(ActivityStatusCode.Ok);
         }
     }
 
