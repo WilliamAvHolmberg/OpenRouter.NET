@@ -14,7 +14,10 @@ using OpenTelemetry.Exporter;
 var builder = WebApplication.CreateBuilder(args);
 
 // Enable verbose logging for OpenTelemetry debugging
-builder.Logging.AddFilter("OpenTelemetry", LogLevel.Debug);
+builder.Logging.SetMinimumLevel(LogLevel.Debug);
+builder.Logging.AddConsole();
+builder.Logging.AddFilter("OpenTelemetry", LogLevel.Trace);
+builder.Logging.AddFilter("OpenTelemetry.Exporter.OpenTelemetryProtocol", LogLevel.Trace);
 
 // ✨ Configure OpenTelemetry with Phoenix OTLP Exporter
 builder.Services.AddOpenTelemetry()
@@ -33,16 +36,9 @@ builder.Services.AddOpenTelemetry()
             .AddConsoleExporter()               // 🔍 Debug: Console output
             .AddOtlpExporter(options =>         // 🔥 Send to Phoenix!
             {
+                // For gRPC, don't use http:// scheme - just the host:port
                 options.Endpoint = new Uri("http://localhost:4317");
                 options.Protocol = OtlpExportProtocol.Grpc;
-                options.ExportProcessorType = OpenTelemetry.ExportProcessorType.Batch;
-                options.BatchExportProcessorOptions = new OpenTelemetry.BatchExportProcessorOptions<System.Diagnostics.Activity>
-                {
-                    MaxQueueSize = 2048,
-                    ScheduledDelayMilliseconds = 5000,  // Export every 5 seconds
-                    ExporterTimeoutMilliseconds = 30000,
-                    MaxExportBatchSize = 512
-                };
             });
     });
 
