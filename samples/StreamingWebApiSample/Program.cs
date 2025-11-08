@@ -27,10 +27,11 @@ builder.Services.AddOpenTelemetry()
             .AddAspNetCoreInstrumentation()     // HTTP requests
             .AddHttpClientInstrumentation()     // Outgoing HTTP
             .AddOpenRouterInstrumentation()     // 🎯 OpenRouter LLM calls
+            .AddConsoleExporter()               // 🔍 Debug: Console output
             .AddOtlpExporter(options =>         // 🔥 Send to Phoenix!
             {
-                options.Endpoint = new Uri("http://localhost:4317");
-                options.Protocol = OtlpExportProtocol.Grpc;
+                options.Endpoint = new Uri("http://localhost:4318/v1/traces");  // HTTP endpoint
+                options.Protocol = OtlpExportProtocol.HttpProtobuf;             // Use HTTP
             });
     });
 
