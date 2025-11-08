@@ -72,3 +72,6 @@ export {
   getFailedTools,
   sortBlocks,
 } from './utils/blocks';
+
+export { convertToBackendMessages } from './utils/messageConverter';
+export type { BackendMessage, BackendToolCall } from './utils/messageConverter';

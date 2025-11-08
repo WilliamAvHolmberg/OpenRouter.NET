@@ -7,6 +7,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { OpenRouterClient } from '../client';
+import { convertToBackendMessages } from '../utils/messageConverter';
 import type {
   ChatMessage,
   TextBlock,
@@ -159,7 +160,7 @@ export function useOpenRouterChat({
   const sendMessage = useCallback(
     async (
       message: string,
-      options?: { model?: string; [key: string]: any }
+      options?: { model?: string; history?: boolean; [key: string]: any }
     ) => {
       // Clear debug data for new message
       if (debugMode) {
@@ -185,13 +186,23 @@ export function useOpenRouterChat({
           throw new Error('Client not initialized');
         }
 
+        // Build request payload
+        const requestPayload: any = {
+          ...options,
+          message,
+          model: options?.model || defaultModel,
+          conversationId: conversationIdRef.current,
+        };
+
+        // If history option is true, convert and include message history
+        if (options?.history === true) {
+          // Get current messages (excluding the assistant message we just added)
+          const currentMessages = messages.concat([userMessage]);
+          requestPayload.messages = convertToBackendMessages(currentMessages);
+        }
+
         await clientRef.current.stream(
-          {
-            ...options,
-            message,
-            model: options?.model || defaultModel,
-            conversationId: conversationIdRef.current,
-          },
+          requestPayload,
           {
             onToolClient: (event: ToolClientEvent) => {
               const toolBlock: ToolCallBlock = {
@@ -378,7 +389,7 @@ export function useOpenRouterChat({
         setIsStreaming(false);
       }
     },
-    [defaultModel, updateStreamingMessage, debugMode]
+    [defaultModel, updateStreamingMessage, debugMode, messages]
   );
 
   /**

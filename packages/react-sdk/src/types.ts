@@ -188,6 +188,8 @@ export interface ChatRequest {
   message: string;
   model?: string;
   conversationId?: string;
+  /** Optional conversation history (for client-side history management) */
+  messages?: any[]; // Backend Message format
   /** Optional bag for arbitrary backend-recognized extras (e.g., enabledArtifacts) */
   customArguments?: Record<string, any>;
 }
@@ -278,7 +280,7 @@ export interface ChatState {
 /** Actions returned by useOpenRouterChat */
 export interface ChatActions {
   /** Send a message and start streaming response */
-  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any> }) => Promise<void>;
+  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any>; history?: boolean }) => Promise<void>;
   /** Clear conversation history */
   clearConversation: () => Promise<void>;
   /** Cancel current stream */

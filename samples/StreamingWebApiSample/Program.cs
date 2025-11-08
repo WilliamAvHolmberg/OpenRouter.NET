@@ -99,20 +99,34 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
         client.RegisterTool(webSearch, nameof(webSearch.SearchWeb));
     }
 
-    var conversationId = chatRequest.ConversationId ?? Guid.NewGuid().ToString();
-    var history = conversationStore.GetOrAdd(conversationId, _ => new List<Message>());
+    List<Message> messagesToSend;
 
-    if (history.Count == 0)
+    // Client-side history pattern (stateless)
+    if (chatRequest.Messages != null && chatRequest.Messages.Count > 0)
     {
-        history.Add(Message.FromSystem("You are a helpful assistant that can perform calculations and create code artifacts."));
+        // Use client-provided history + new message
+        messagesToSend = new List<Message>(chatRequest.Messages);
+        messagesToSend.Add(Message.FromUser(chatRequest.Message));
     }
+    else
+    {
+        // Server-side history pattern (backward compatible)
+        var conversationId = chatRequest.ConversationId ?? Guid.NewGuid().ToString();
+        var history = conversationStore.GetOrAdd(conversationId, _ => new List<Message>());
 
-    history.Add(Message.FromUser(chatRequest.Message));
+        if (history.Count == 0)
+        {
+            history.Add(Message.FromSystem("You are a helpful assistant that can perform calculations and create code artifacts."));
+        }
+
+        history.Add(Message.FromUser(chatRequest.Message));
+        messagesToSend = history;
+    }
 
     var request = new ChatCompletionRequest
     {
         Model = chatRequest.Model ?? "google/gemini-2.5-flash",
-        Messages = history
+        Messages = messagesToSend
     };
 
     if (chatRequest.EnabledArtifacts != null)
@@ -487,6 +501,7 @@ app.Run();
 public record ChatRequest(string Message, string? Model = null, string? ConversationId = null)
 {
    public EnabledArtifact[]? EnabledArtifacts { get; init; }
+   public List<Message>? Messages { get; init; }
 }
 
 public record DashboardChatRequest(string Message, string? Model = null, string? ConversationId = null);
