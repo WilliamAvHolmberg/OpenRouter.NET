@@ -1,4 +1,5 @@
 using OpenRouter.NET;
+using OpenRouter.NET.Observability;
 using OpenRouter.NET.Sse;
 using OpenRouter.NET.Models;
 using OpenRouter.NET.Tools;
@@ -6,8 +7,27 @@ using System.Collections.Concurrent;
 using StreamingWebApiSample;
 using OpenRouter.NET.Artifacts;
 using System.Text.Json;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ✨ Configure OpenTelemetry with Console Exporter for observability
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource
+        .AddService("openrouter-streaming-api")
+        .AddAttributes(new Dictionary<string, object>
+        {
+            ["deployment.environment"] = builder.Environment.EnvironmentName
+        }))
+    .WithTracing(tracerProvider =>
+    {
+        tracerProvider
+            .AddAspNetCoreInstrumentation()     // HTTP requests
+            .AddHttpClientInstrumentation()     // Outgoing HTTP
+            .AddOpenRouterInstrumentation()     // 🎯 OpenRouter LLM calls
+            .AddConsoleExporter();              // Output traces to console
+    });
 
 builder.Services.AddOpenApi();
 builder.Services.AddControllers();
@@ -47,6 +67,7 @@ var dashboardConversationStore = new ConcurrentDictionary<string, List<Message>>
 
 app.MapGet("/api/models", async () =>
 {
+    // Simple client without telemetry for models endpoint
     var client = new OpenRouterClient(apiKey);
     var models = await client.GetModelsAsync();
     
@@ -62,7 +83,20 @@ app.MapGet("/api/models", async () =>
 
 app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) =>
 {
-    var client = new OpenRouterClient(apiKey);
+    // ✨ Create client with observability enabled
+    var client = new OpenRouterClient(new OpenRouterClientOptions
+    {
+        ApiKey = apiKey,
+        Telemetry = new OpenRouterTelemetryOptions
+        {
+            EnableTelemetry = true,
+            CapturePrompts = true,          // Log input prompts
+            CaptureCompletions = true,      // Log outputs
+            CaptureToolDetails = true,      // Log tool arguments/results
+            CaptureStreamChunks = true,     // Log streaming chunks (high volume!)
+            MaxEventBodySize = 32_000       // 32KB limit
+        }
+    });
 
     // Check for API keys and register tools accordingly
     var tavilyApiKey = Environment.GetEnvironmentVariable("TAVILY_API_KEY");
@@ -164,7 +198,18 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
 
 app.MapPost("/api/dashboard/stream", async (DashboardChatRequest chatRequest, HttpContext context) =>
 {
-    var client = new OpenRouterClient(apiKey);
+    // ✨ Create client with observability enabled
+    var client = new OpenRouterClient(new OpenRouterClientOptions
+    {
+        ApiKey = apiKey,
+        Telemetry = new OpenRouterTelemetryOptions
+        {
+            EnableTelemetry = true,
+            CapturePrompts = true,
+            CaptureCompletions = true,
+            CaptureToolDetails = true
+        }
+    });
 
     // ✨ Typed client-side tools for dashboard widgets
     client
@@ -393,7 +438,17 @@ app.MapDelete("/api/conversation/{conversationId}", (string conversationId) =>
 
 app.MapPost("/api/generate-object", async (GenerateObjectApiRequest request) =>
 {
-    var client = new OpenRouterClient(apiKey);
+    // ✨ Create client with observability for object generation
+    var client = new OpenRouterClient(new OpenRouterClientOptions
+    {
+        ApiKey = apiKey,
+        Telemetry = new OpenRouterTelemetryOptions
+        {
+            EnableTelemetry = true,
+            CapturePrompts = true,
+            CaptureCompletions = true
+        }
+    });
     
     try
     {
@@ -431,7 +486,17 @@ app.MapPost("/api/generate-object", async (GenerateObjectApiRequest request) =>
 // ✨ Strongly-typed structured outputs - no more JSON parsing!
 app.MapPost("/api/triage-bug", async (BugReportRequest request) =>
 {
-    var client = new OpenRouterClient(apiKey);
+    // ✨ Create client with observability for bug triage
+    var client = new OpenRouterClient(new OpenRouterClientOptions
+    {
+        ApiKey = apiKey,
+        Telemetry = new OpenRouterTelemetryOptions
+        {
+            EnableTelemetry = true,
+            CapturePrompts = true,
+            CaptureCompletions = true
+        }
+    });
 
     var analysis = await client.GenerateObjectAsync<BugAnalysis>(
         prompt: $"Analyze this bug report and extract structured information:\n\n{request.Description}",
@@ -454,7 +519,18 @@ app.MapPost("/api/triage-bug", async (BugReportRequest request) =>
 // ✨ Demo of typed tools - clean, type-safe tool registration
 app.MapGet("/api/demo-typed-tools", async (HttpContext context) =>
 {
-    var client = new OpenRouterClient(apiKey);
+    // ✨ Create client with observability for typed tools demo
+    var client = new OpenRouterClient(new OpenRouterClientOptions
+    {
+        ApiKey = apiKey,
+        Telemetry = new OpenRouterTelemetryOptions
+        {
+            EnableTelemetry = true,
+            CapturePrompts = true,
+            CaptureCompletions = true,
+            CaptureToolDetails = true
+        }
+    });
 
     // One-line registration for each typed tool!
     client.RegisterTool<CalculateTool>();
