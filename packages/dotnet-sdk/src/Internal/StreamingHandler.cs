@@ -228,6 +228,7 @@ internal class StreamingHandler
         string? responseModel = null;
         int? inputTokens = null;
         int? outputTokens = null;
+        var completeTextBuilder = new StringBuilder(); // Accumulate full completion for OpenInference
 
         string? line;
         while ((line = await reader.ReadLineAsync()) != null && !cancellationToken.IsCancellationRequested)
@@ -321,6 +322,12 @@ internal class StreamingHandler
                                 { "elapsed_ms", (long)chunkToYield.ElapsedTime.TotalMilliseconds }
                             }));
                     }
+
+                    // Accumulate complete text for OpenInference attributes
+                    if (!string.IsNullOrEmpty(chunkToYield.TextDelta))
+                    {
+                        completeTextBuilder.Append(chunkToYield.TextDelta);
+                    }
                 }
 
                 yield return chunkToYield;
@@ -368,6 +375,21 @@ internal class StreamingHandler
 
             currentActivity.SetTag(GenAiSemanticConventions.AttributeHttpStatusCode, 200);
             currentActivity.SetStatus(ActivityStatusCode.Ok);
+
+            // OpenInference: Add complete output message as span attributes for Phoenix UI
+            if (_telemetryOptions.CaptureCompletions && completeTextBuilder.Length > 0)
+            {
+                var completeText = completeTextBuilder.ToString();
+                var truncated = TelemetryHelper.TruncateIfNeeded(completeText, _telemetryOptions.MaxEventBodySize);
+
+                currentActivity.SetTag("llm.output_messages.0.message.role", "assistant");
+                currentActivity.SetTag("llm.output_messages.0.message.content", truncated);
+
+                if (!string.IsNullOrEmpty(finishReason))
+                {
+                    currentActivity.SetTag("llm.output_messages.0.finish_reason", finishReason);
+                }
+            }
         }
     }
 

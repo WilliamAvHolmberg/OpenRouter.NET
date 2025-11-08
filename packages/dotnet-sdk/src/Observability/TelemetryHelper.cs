@@ -75,6 +75,21 @@ internal static class TelemetryHelper
         // Opt-in: Capture structured prompts
         if (options.CapturePrompts && request.Messages?.Count > 0)
         {
+            // OpenInference convention: store as span attributes for Phoenix UI visibility
+            for (int i = 0; i < request.Messages.Count; i++)
+            {
+                var message = request.Messages[i];
+                var content = options.SanitizePrompt?.Invoke(GetMessageContent(message)) ?? GetMessageContent(message);
+
+                activity.SetTag($"llm.input_messages.{i}.message.role", message.Role);
+                if (!string.IsNullOrEmpty(content))
+                {
+                    var truncated = TruncateIfNeeded(content, options.MaxEventBodySize);
+                    activity.SetTag($"llm.input_messages.{i}.message.content", truncated);
+                }
+            }
+
+            // Also keep event for compatibility
             var promptData = SerializePrompts(request.Messages, options);
             if (!string.IsNullOrEmpty(promptData))
             {
@@ -150,6 +165,29 @@ internal static class TelemetryHelper
         // Opt-in: Capture structured completions
         if (options.CaptureCompletions && response.Choices?.Count > 0)
         {
+            // OpenInference convention: store as span attributes for Phoenix UI visibility
+            for (int i = 0; i < response.Choices.Count; i++)
+            {
+                var choice = response.Choices[i];
+                if (choice.Message != null)
+                {
+                    var content = options.SanitizeCompletion?.Invoke(GetMessageContent(choice.Message)) ?? GetMessageContent(choice.Message);
+
+                    activity.SetTag($"llm.output_messages.{i}.message.role", choice.Message.Role);
+                    if (!string.IsNullOrEmpty(content))
+                    {
+                        var truncated = TruncateIfNeeded(content, options.MaxEventBodySize);
+                        activity.SetTag($"llm.output_messages.{i}.message.content", truncated);
+                    }
+
+                    if (!string.IsNullOrEmpty(choice.FinishReason))
+                    {
+                        activity.SetTag($"llm.output_messages.{i}.finish_reason", choice.FinishReason);
+                    }
+                }
+            }
+
+            // Also keep event for compatibility
             var completionData = SerializeCompletions(response.Choices, options);
             if (!string.IsNullOrEmpty(completionData))
             {
@@ -297,7 +335,7 @@ internal static class TelemetryHelper
     /// <summary>
     /// Truncates a string if it exceeds the maximum size.
     /// </summary>
-    private static string TruncateIfNeeded(string content, int maxSize)
+    internal static string TruncateIfNeeded(string content, int maxSize)
     {
         if (maxSize <= 0) return content;
 
