@@ -283,12 +283,10 @@ export interface ChatActions {
    * Send a message and start streaming response
    *
    * @param message - The message to send
-   * @param options.history - Conversation history handling:
-   *   - undefined/false: Server-side history (default)
-   *   - true: Use hook's internal message state
-   *   - ChatMessage[]: Use provided custom history (e.g., from localStorage)
+   * @param options.history - Optional conversation history (ChatMessage[]) for client-side history management.
+   *   If not provided, the backend is expected to manage conversation history server-side.
    */
-  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any>; history?: boolean | ChatMessage[] }) => Promise<void>;
+  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any>; history?: ChatMessage[] }) => Promise<void>;
   /** Clear conversation history */
   clearConversation: () => Promise<void>;
   /** Set messages directly (useful for loading history from external source like localStorage) */

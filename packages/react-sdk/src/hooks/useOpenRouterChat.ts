@@ -160,7 +160,7 @@ export function useOpenRouterChat({
   const sendMessage = useCallback(
     async (
       message: string,
-      options?: { model?: string; history?: boolean | ChatMessage[]; [key: string]: any }
+      options?: { model?: string; history?: ChatMessage[]; [key: string]: any }
     ) => {
       // Clear debug data for new message
       if (debugMode) {
@@ -195,23 +195,9 @@ export function useOpenRouterChat({
           conversationId: conversationIdRef.current,
         };
 
-        // Handle conversation history
-        if (history) {
-          let historyToSend: ChatMessage[];
-
-          if (Array.isArray(history)) {
-            // Use custom history provided by user (e.g., from localStorage)
-            historyToSend = history;
-          } else if (history === true) {
-            // Use hook's internal message state (excluding the assistant message we just added)
-            historyToSend = messages.concat([userMessage]);
-          } else {
-            historyToSend = [];
-          }
-
-          if (historyToSend.length > 0) {
-            requestPayload.messages = convertToBackendMessages(historyToSend);
-          }
+        // Handle conversation history - user must provide explicit history if needed
+        if (history && Array.isArray(history)) {
+          requestPayload.messages = convertToBackendMessages(history);
         }
 
         await clientRef.current.stream(
@@ -402,7 +388,7 @@ export function useOpenRouterChat({
         setIsStreaming(false);
       }
     },
-    [defaultModel, updateStreamingMessage, debugMode, messages]
+    [defaultModel, updateStreamingMessage, debugMode]
   );
 
   /**

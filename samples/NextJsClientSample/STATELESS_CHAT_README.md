@@ -113,15 +113,12 @@ var newMessages = await client.StreamAsSseAsync(request, context.Response);
 ### SDK: Flexible History Support
 
 ```typescript
-// Option 1: Use hook's internal state
-await sendMessage("Hi", { history: true });
-
-// Option 2: Custom history (what we use here!)
+// Option 1: Client-side with custom history (what we use here!)
 const customHistory = loadHistory('conv-123');
 await sendMessage("Hi", { history: customHistory });
 
-// Option 3: Server-side (traditional)
-await sendMessage("Hi"); // No history parameter
+// Option 2: Server-side (traditional)
+await sendMessage("Hi"); // No history parameter - backend manages state
 ```
 
 ## 📊 Comparison
