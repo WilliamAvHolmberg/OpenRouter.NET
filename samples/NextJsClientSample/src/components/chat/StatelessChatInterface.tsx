@@ -44,7 +44,6 @@ export function StatelessChatInterface() {
     if (typeof window === "undefined") return;
 
     const savedHistory = loadHistory(conversationId);
-    console.log(`Loaded ${JSON.stringify(savedHistory)} messages from localStorage`);
     
     // Populate the hook's state with loaded history
     actions.setMessages(savedHistory);
@@ -217,7 +216,7 @@ export function StatelessChatInterface() {
           ) : (
             <MessageList
               messages={state.messages}
-              isStreaming={state.isStreaming}
+              error={state.error}
             />
           )}
         </div>
@@ -226,9 +225,12 @@ export function StatelessChatInterface() {
         <div className="border-t border-gray-200 bg-white p-4">
           <ChatInput
             value={input}
+            isStreaming={state.isStreaming}
+            models={[]}
+            selectedModel={DEFAULT_MODEL}
+            onModelChange={() => {}}
             onChange={setInput}
             onSend={handleSend}
-            disabled={state.isStreaming}
             placeholder="Type your message... (stored in localStorage)"
           />
         </div>
