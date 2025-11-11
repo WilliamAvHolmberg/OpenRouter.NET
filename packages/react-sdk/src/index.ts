@@ -75,3 +75,12 @@ export {
 
 export { convertToBackendMessages } from './utils/messageConverter';
 export type { BackendMessage, BackendToolCall } from './utils/messageConverter';
+
+export {
+  saveHistory,
+  loadHistory,
+  clearHistory,
+  listConversations,
+  getStorageSize,
+} from './utils/historyPersistence';
+export type { HistoryPersistenceOptions } from './utils/historyPersistence';

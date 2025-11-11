@@ -279,8 +279,16 @@ export interface ChatState {
 
 /** Actions returned by useOpenRouterChat */
 export interface ChatActions {
-  /** Send a message and start streaming response */
-  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any>; history?: boolean }) => Promise<void>;
+  /**
+   * Send a message and start streaming response
+   *
+   * @param message - The message to send
+   * @param options.history - Conversation history handling:
+   *   - undefined/false: Server-side history (default)
+   *   - true: Use hook's internal message state
+   *   - ChatMessage[]: Use provided custom history (e.g., from localStorage)
+   */
+  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any>; history?: boolean | ChatMessage[] }) => Promise<void>;
   /** Clear conversation history */
   clearConversation: () => Promise<void>;
   /** Cancel current stream */
