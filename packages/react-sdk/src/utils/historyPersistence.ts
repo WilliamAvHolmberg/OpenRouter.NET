@@ -9,8 +9,30 @@ export interface HistoryPersistenceOptions {
   keyPrefix?: string;
   /** Maximum messages to store per conversation (default: 100) */
   maxMessages?: number;
-  /** Auto-save on message updates (default: true) */
-  autoSave?: boolean;
+}
+
+/**
+ * Safely parse a date from unknown input
+ */
+function parseDate(value: unknown): Date {
+  if (!value) return new Date();
+  
+  const date = new Date(value as string | number);
+  return isNaN(date.getTime()) ? new Date() : date;
+}
+
+/**
+ * Validate that an object looks like a ChatMessage
+ */
+function isValidMessage(obj: unknown): boolean {
+  if (typeof obj !== 'object' || obj === null) return false;
+  
+  const msg = obj as Record<string, unknown>;
+  return (
+    typeof msg.id === 'string' &&
+    typeof msg.role === 'string' &&
+    Array.isArray(msg.blocks)
+  );
 }
 
 /**
@@ -61,15 +83,25 @@ export function loadHistory(
 
     const parsed = JSON.parse(stored);
 
-    // Revive Date objects
-    return parsed.map((msg: any) => ({
-      ...msg,
-      timestamp: new Date(msg.timestamp),
-      blocks: msg.blocks.map((block: any) => ({
-        ...block,
-        timestamp: new Date(block.timestamp),
-      })),
-    }));
+    // Validate root structure
+    if (!Array.isArray(parsed)) {
+      console.warn('Invalid history format: expected array');
+      return [];
+    }
+
+    // Filter valid messages and restore dates
+    return parsed
+      .filter(isValidMessage)
+      .map((msg) => ({
+        ...msg,
+        timestamp: parseDate(msg.timestamp),
+        blocks: Array.isArray(msg.blocks)
+          ? msg.blocks.map((block: any) => ({
+              ...block,
+              timestamp: parseDate(block.timestamp),
+            }))
+          : [],
+      }));
   } catch (error) {
     console.error('Failed to load conversation history:', error);
     return [];
