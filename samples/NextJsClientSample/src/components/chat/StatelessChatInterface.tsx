@@ -65,13 +65,9 @@ export function StatelessChatInterface() {
   const handleSend = async () => {
     if (!input.trim() || state.isStreaming) return;
 
-    // Load current history from localStorage
-    const currentHistory = loadHistory(conversationId);
-
-    // Send with client-side history!
     await actions.sendMessage(input, {
       model: DEFAULT_MODEL,
-      history: currentHistory, // Pass custom history from localStorage
+      history: state.messages,
     });
 
     setInput("");

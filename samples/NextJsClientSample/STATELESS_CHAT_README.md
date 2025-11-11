@@ -72,13 +72,10 @@ You'll see console output showing:
 
 ```typescript
 const handleSend = async () => {
-  // Load current history from localStorage
-  const currentHistory = loadHistory(conversationId);
-
-  // Send with client-side history!
+  // Send with client-side history from hook's state
   await actions.sendMessage(input, {
     model: DEFAULT_MODEL,
-    history: currentHistory, // ← Custom history array
+    history: state.messages, // Use hook's current state (synced with localStorage)
   });
 };
 ```
@@ -113,11 +110,14 @@ var newMessages = await client.StreamAsSseAsync(request, context.Response);
 ### SDK: Flexible History Support
 
 ```typescript
-// Option 1: Client-side with custom history (what we use here!)
+// Option 1: Client-side with hook's synced state (recommended)
+await sendMessage("Hi", { history: state.messages });
+
+// Option 2: Client-side with direct localStorage read (for advanced use cases)
 const customHistory = loadHistory('conv-123');
 await sendMessage("Hi", { history: customHistory });
 
-// Option 2: Server-side (traditional)
+// Option 3: Server-side (traditional)
 await sendMessage("Hi"); // No history parameter - backend manages state
 ```
 
@@ -179,12 +179,25 @@ await sendMessage("Hi"); // No history parameter - backend manages state
 
 ## 🔧 Advanced Usage
 
+### When to Read from localStorage Directly
+
+In most cases, use `state.messages` which is kept in sync with localStorage. However, you might read from localStorage directly for:
+
+```typescript
+// Loading a different conversation than the current one
+const otherConversation = loadHistory('other-conv-id');
+
+// Pre-processing before sending (without modifying state)
+const fullHistory = loadHistory(conversationId);
+const sanitized = fullHistory.filter(msg => !msg.sensitive);
+await sendMessage("Task", { history: sanitized });
+```
+
 ### Custom Pruning
 
 ```typescript
 // Keep only last 50 messages to reduce payload
-const fullHistory = loadHistory(conversationId);
-const pruned = fullHistory.slice(-50);
+const pruned = state.messages.slice(-50);
 await sendMessage("Continue", { history: pruned });
 ```
 
@@ -192,8 +205,7 @@ await sendMessage("Continue", { history: pruned });
 
 ```typescript
 // Filter sensitive content before sending
-const history = loadHistory(conversationId);
-const sanitized = history.filter(msg =>
+const sanitized = state.messages.filter(msg =>
   !msg.blocks.some(b => b.type === 'sensitive')
 );
 await sendMessage("Task", { history: sanitized });
@@ -203,10 +215,9 @@ await sendMessage("Task", { history: sanitized });
 
 ```typescript
 // Add system prompt to existing history
-const baseHistory = loadHistory(conversationId);
 const withContext = [
   createMessage('system', 'Custom instructions...'),
-  ...baseHistory
+  ...state.messages
 ];
 await sendMessage("Task", { history: withContext });
 ```
@@ -243,10 +254,10 @@ const bytes = getStorageSize(conversationId);
 ## 🎓 Learning Points
 
 1. **Client-side history is production-ready** - Not just a toy pattern
-2. **The SDK is flexible** - Doesn't force you into one approach
-3. **Zero server memory is achievable** - No trade-offs in functionality
-4. **localStorage is powerful** - Great for many use cases
-5. **The conversation is the data** - Store it where it makes sense
+2. **Use `state.messages` for sending** - No need to read from localStorage on every send
+3. **localStorage is for persistence only** - Load once on mount, save on changes
+4. **The SDK is flexible** - Doesn't force you into one approach
+5. **Zero server memory is achievable** - No trade-offs in functionality
 
 ## 🚦 When to Use
 

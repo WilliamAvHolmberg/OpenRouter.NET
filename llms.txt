@@ -1680,12 +1680,9 @@ function StatelessChat() {
   }, [state.messages, conversationId]);
   
   const handleSend = async (input: string) => {
-    // Load current history from localStorage
-    const currentHistory = loadHistory(conversationId);
-    
-    // Send with full history
+    // Send with full history from hook's state (synced with localStorage)
     await actions.sendMessage(input, {
-      history: currentHistory  // Automatically converted to backend format
+      history: state.messages
     });
   };
   
