@@ -100,6 +100,7 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
     }
 
     List<Message> messagesToSend;
+    List<Message>? serverSideHistory = null; // Track server-side history for persistence
 
     // Client-side history pattern (stateless)
     if (chatRequest.Messages != null && chatRequest.Messages.Count > 0)
@@ -112,15 +113,15 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
     {
         // Server-side history pattern (backward compatible)
         var conversationId = chatRequest.ConversationId ?? Guid.NewGuid().ToString();
-        var history = conversationStore.GetOrAdd(conversationId, _ => new List<Message>());
+        serverSideHistory = conversationStore.GetOrAdd(conversationId, _ => new List<Message>());
 
-        if (history.Count == 0)
+        if (serverSideHistory.Count == 0)
         {
-            history.Add(Message.FromSystem("You are a helpful assistant that can perform calculations and create code artifacts."));
+            serverSideHistory.Add(Message.FromSystem("You are a helpful assistant that can perform calculations and create code artifacts."));
         }
 
-        history.Add(Message.FromUser(chatRequest.Message));
-        messagesToSend = history;
+        serverSideHistory.Add(Message.FromUser(chatRequest.Message));
+        messagesToSend = serverSideHistory;
     }
 
     var request = new ChatCompletionRequest
@@ -171,8 +172,11 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
 
     var newMessages = await client.StreamAsSseAsync(request, context.Response);
 
-    // Add all assistant and tool messages to conversation history
-    history.AddRange(newMessages);
+    // Add all assistant and tool messages to conversation history (only for server-side pattern)
+    if (serverSideHistory != null)
+    {
+        serverSideHistory.AddRange(newMessages);
+    }
 })
 .WithName("Stream");
 
