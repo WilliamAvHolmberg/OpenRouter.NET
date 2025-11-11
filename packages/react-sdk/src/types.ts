@@ -188,6 +188,8 @@ export interface ChatRequest {
   message: string;
   model?: string;
   conversationId?: string;
+  /** Optional conversation history (for client-side history management) */
+  messages?: any[]; // Backend Message format
   /** Optional bag for arbitrary backend-recognized extras (e.g., enabledArtifacts) */
   customArguments?: Record<string, any>;
 }
@@ -277,10 +279,18 @@ export interface ChatState {
 
 /** Actions returned by useOpenRouterChat */
 export interface ChatActions {
-  /** Send a message and start streaming response */
-  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any> }) => Promise<void>;
+  /**
+   * Send a message and start streaming response
+   *
+   * @param message - The message to send
+   * @param options.history - Optional conversation history (ChatMessage[]) for client-side history management.
+   *   If not provided, the backend is expected to manage conversation history server-side.
+   */
+  sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any>; history?: ChatMessage[] }) => Promise<void>;
   /** Clear conversation history */
   clearConversation: () => Promise<void>;
+  /** Set messages directly (useful for loading history from external source like localStorage) */
+  setMessages: (messages: ChatMessage[]) => void;
   /** Cancel current stream */
   cancelStream: () => void;
   /** Retry last message */

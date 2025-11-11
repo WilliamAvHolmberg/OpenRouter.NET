@@ -7,6 +7,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import { OpenRouterClient } from '../client';
+import { convertToBackendMessages } from '../utils/messageConverter';
 import type {
   ChatMessage,
   TextBlock,
@@ -159,7 +160,7 @@ export function useOpenRouterChat({
   const sendMessage = useCallback(
     async (
       message: string,
-      options?: { model?: string; [key: string]: any }
+      options?: { model?: string; history?: ChatMessage[]; [key: string]: any }
     ) => {
       // Clear debug data for new message
       if (debugMode) {
@@ -185,13 +186,22 @@ export function useOpenRouterChat({
           throw new Error('Client not initialized');
         }
 
+        // Build request payload
+        const { history, model, ...otherOptions } = options || {};
+        const requestPayload: any = {
+          ...otherOptions,
+          message,
+          model: model || defaultModel,
+          conversationId: conversationIdRef.current,
+        };
+
+        // Handle conversation history - user must provide explicit history if needed
+        if (history && Array.isArray(history)) {
+          requestPayload.messages = convertToBackendMessages(history);
+        }
+
         await clientRef.current.stream(
-          {
-            ...options,
-            message,
-            model: options?.model || defaultModel,
-            conversationId: conversationIdRef.current,
-          },
+          requestPayload,
           {
             onToolClient: (event: ToolClientEvent) => {
               const toolBlock: ToolCallBlock = {
@@ -383,13 +393,17 @@ export function useOpenRouterChat({
 
   /**
    * Clear conversation
+   * - If clearConversation endpoint is configured: calls backend (server-side history)
+   * - If no endpoint: just clears local state (client-side history)
    */
   const clearConversation = useCallback(async () => {
     try {
-      if (!clientRef.current) {
-        throw new Error('Client not initialized');
+      // Only call backend if endpoint is configured (server-side history pattern)
+      if (endpoints.clearConversation && clientRef.current) {
+        await clientRef.current.clearConversation(conversationIdRef.current);
       }
-      await clientRef.current.clearConversation(conversationIdRef.current);
+      
+      // Always clear local state (works for both patterns)
       setMessages([]);
       setError(null);
       // Generate new conversation ID
@@ -397,6 +411,13 @@ export function useOpenRouterChat({
     } catch (err) {
       console.error('Failed to clear conversation:', err);
     }
+  }, [endpoints]);
+
+  /**
+   * Set messages directly (useful for loading history from external source)
+   */
+  const setMessagesAction = useCallback((newMessages: ChatMessage[]) => {
+    setMessages(newMessages);
   }, []);
 
   /**
@@ -435,6 +456,7 @@ export function useOpenRouterChat({
   const actions: ChatActions = {
     sendMessage,
     clearConversation,
+    setMessages: setMessagesAction,
     cancelStream,
     retry,
   };

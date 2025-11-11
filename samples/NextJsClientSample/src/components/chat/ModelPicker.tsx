@@ -18,7 +18,7 @@ interface ModelPickerProps {
   size?: 'sm' | 'md';
 }
 
-export function ModelPicker({ models, selectedModel, onSelect, disabled, variant = 'default', size = 'sm' }: ModelPickerProps) {
+export function ModelPicker({ models = [], selectedModel, onSelect, disabled, variant = 'default', size = 'sm' }: ModelPickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
