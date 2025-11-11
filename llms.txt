@@ -1579,6 +1579,307 @@ while (true)
 }
 ---
 
+6.4 CLIENT-SIDE HISTORY (PRODUCTION STATELESS PATTERN)
+-------------------------------------------------------
+
+For production-ready, horizontally-scalable applications, implement
+client-side history management with ZERO server memory usage.
+
+BENEFITS:
+- ✅ Zero server memory - infinite scalability
+- ✅ Survives server restarts - no data loss
+- ✅ No session affinity - any server handles any request
+- ✅ Natural limits - browser storage quota
+- ✅ User privacy - data stays on device
+- ✅ Works with tools and artifacts automatically
+
+BACKEND PATTERN (ASP.NET Core):
+---
+app.MapPost("/api/stream-stateless", async (ChatRequest chatRequest, HttpContext context) =>
+{
+    var client = new OpenRouterClient(apiKey);
+    
+    // Register tools (if needed)
+    client
+        .RegisterTool<AddTool>()
+        .RegisterTool<SubtractTool>();
+    
+    List<Message> messagesToSend;
+    
+    if (chatRequest.Messages != null && chatRequest.Messages.Count > 0)
+    {
+        // Client provides full history - server is STATELESS!
+        messagesToSend = new List<Message>(chatRequest.Messages);
+        messagesToSend.Add(Message.FromUser(chatRequest.Message));
+    }
+    else
+    {
+        // First message in conversation
+        messagesToSend = new List<Message>
+        {
+            Message.FromSystem("You are a helpful assistant."),
+            Message.FromUser(chatRequest.Message)
+        };
+    }
+    
+    var request = new ChatCompletionRequest
+    {
+        Model = chatRequest.Model ?? "anthropic/claude-3.5-sonnet",
+        Messages = messagesToSend
+    };
+    
+    // Enable artifacts (optional)
+    request.EnableArtifactSupport(
+        customInstructions: "Create artifacts for code examples."
+    );
+    
+    // Stream response - NO server-side storage!
+    await client.StreamAsSseAsync(request, context.Response);
+    
+    // ⚠️ CRITICAL: Do NOT save messages to any server-side store
+    // Client handles all persistence
+});
+
+record ChatRequest(string Message, string? Model = null)
+{
+    public List<Message>? Messages { get; init; }
+}
+---
+
+REACT/NEXT.JS FRONTEND PATTERN:
+---
+import { 
+  useOpenRouterChat, 
+  saveHistory, 
+  loadHistory,
+  clearHistory 
+} from '@openrouter-dotnet/react';
+import { useState, useEffect } from 'react';
+
+function StatelessChat() {
+  const [conversationId] = useState(`conv_${Date.now()}`);
+  
+  const { state, actions } = useOpenRouterChat({
+    endpoints: { stream: '/api/stream-stateless' },
+    defaultModel: 'anthropic/claude-3.5-sonnet'
+  });
+  
+  // Load history when conversation changes
+  useEffect(() => {
+    const savedHistory = loadHistory(conversationId);
+    actions.setMessages(savedHistory); // Populate hook state
+  }, [conversationId]);
+  
+  // Auto-save after each message
+  useEffect(() => {
+    if (state.messages.length > 0) {
+      saveHistory(conversationId, state.messages, {
+        maxMessages: 100  // Auto-prune old messages
+      });
+    }
+  }, [state.messages, conversationId]);
+  
+  const handleSend = async (input: string) => {
+    // Load current history from localStorage
+    const currentHistory = loadHistory(conversationId);
+    
+    // Send with full history
+    await actions.sendMessage(input, {
+      history: currentHistory  // Automatically converted to backend format
+    });
+  };
+  
+  return (
+    <div>
+      <MessageList messages={state.messages} />
+      <ChatInput onSend={handleSend} />
+    </div>
+  );
+}
+---
+
+HOW IT WORKS:
+1. Client loads conversation from localStorage
+2. Client sends full history + new message to backend
+3. Backend processes request (stateless - no storage)
+4. Backend streams response back
+5. Client receives response and saves to localStorage
+6. Tool calls are automatically included in history
+
+REACT SDK UTILITIES:
+
+saveHistory(conversationId, messages, options?)
+- Save messages to localStorage
+- Options: maxMessages (auto-prune), keyPrefix (custom prefix)
+
+loadHistory(conversationId, options?)
+- Load messages from localStorage
+- Returns ChatMessage[]
+- Returns empty array if not found
+
+clearHistory(conversationId, options?)
+- Remove conversation from localStorage
+
+listConversations(options?)
+- Get list of all conversation IDs
+- Returns string[]
+
+getStorageSize(options?)
+- Get total storage used in bytes
+- Returns number
+
+TOOL CALLS IN CLIENT-SIDE HISTORY:
+
+Tool calls are automatically converted to backend format:
+
+ChatMessage (React format):
+{
+  role: "assistant",
+  blocks: [
+    { type: "text", content: "I'll add those numbers" },
+    { type: "tool_call", toolName: "add", status: "completed", result: "42" }
+  ]
+}
+
+↓ Converted to ↓
+
+Backend Message format:
+[
+  {
+    role: "assistant",
+    content: "I'll add those numbers",
+    tool_calls: [{ id: "...", type: "function", function: { name: "add", arguments: "..." } }]
+  },
+  {
+    role: "tool",
+    tool_call_id: "...",
+    content: "42"
+  }
+]
+
+CRITICAL: Tool result messages are automatically created!
+
+ARTIFACTS IN CLIENT-SIDE HISTORY:
+
+Artifacts are included as text in message content:
+
+ChatMessage with artifact:
+{
+  role: "assistant",
+  blocks: [
+    { type: "text", content: "Here's a React component:" },
+    { type: "artifact", title: "Widget.tsx", content: "..." }
+  ]
+}
+
+↓ Converted to ↓
+
+{
+  role: "assistant",
+  content: "Here's a React component:\n\n[Artifact: Widget.tsx]\n..."
+}
+
+STATELESS VS SERVER-SIDE COMPARISON:
+
+Server-Side History (Traditional):
+❌ Memory grows unbounded
+❌ Lost on restart
+❌ Requires sticky sessions
+❌ Single point of failure
+✅ Simple implementation
+
+Client-Side History (Production):
+✅ Zero memory usage
+✅ Survives restarts
+✅ Infinite scale
+✅ No session affinity
+⚠️ Requires client management
+
+BEST PRACTICES:
+
+1. Set maxMessages to prevent quota issues:
+   saveHistory(id, msgs, { maxMessages: 100 })
+
+2. Use separate conversations for different topics
+
+3. Clear old conversations periodically:
+   const convs = listConversations();
+   convs.forEach(id => clearHistory(id));
+
+4. Monitor storage size:
+   const size = getStorageSize();
+   if (size > 5_000_000) { /* cleanup */ }
+
+5. Handle tool calls transparently - SDK converts automatically
+
+6. Enable artifacts in backend if needed
+
+7. Don't send history on every message - only what's needed
+
+COMPLETE WORKING EXAMPLE:
+
+Backend (Program.cs):
+---
+app.MapPost("/api/stream-stateless", async (ChatRequest req, HttpContext ctx) =>
+{
+    var client = new OpenRouterClient(apiKey);
+    client.RegisterTool<CalculatorTool>();
+    
+    var messages = req.Messages ?? new List<Message>
+    {
+        Message.FromSystem("You are a helpful assistant.")
+    };
+    messages.Add(Message.FromUser(req.Message));
+    
+    var request = new ChatCompletionRequest
+    {
+        Model = req.Model ?? "anthropic/claude-3.5-sonnet",
+        Messages = messages
+    };
+    
+    request.EnableArtifactSupport();
+    await client.StreamAsSseAsync(request, ctx.Response);
+});
+
+record ChatRequest(string Message, string? Model = null)
+{
+    public List<Message>? Messages { get; init; }
+}
+---
+
+Frontend (React):
+---
+function Chat() {
+  const [id] = useState(`conv_${Date.now()}`);
+  const { state, actions } = useOpenRouterChat({
+    endpoints: { stream: '/api/stream-stateless' }
+  });
+  
+  useEffect(() => {
+    actions.setMessages(loadHistory(id));
+  }, [id]);
+  
+  useEffect(() => {
+    if (state.messages.length > 0) {
+      saveHistory(id, state.messages);
+    }
+  }, [state.messages]);
+  
+  const send = async (text: string) => {
+    await actions.sendMessage(text, {
+      history: loadHistory(id)
+    });
+  };
+  
+  return <MessageList messages={state.messages} />;
+}
+---
+
+This pattern is production-ready and handles tools, artifacts, and multi-turn
+conversations with zero server memory usage.
+
+See samples/NextJsClientSample/STATELESS_CHAT_README.md for complete guide.
+
 ================================================================================
 7. ADVANCED FEATURES
 ================================================================================

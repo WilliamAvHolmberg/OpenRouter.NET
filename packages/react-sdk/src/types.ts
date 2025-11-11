@@ -291,6 +291,8 @@ export interface ChatActions {
   sendMessage: (message: string, options?: { model?: string; enabledArtifacts?: EnabledArtifact[]; customArguments?: Record<string, any>; history?: boolean | ChatMessage[] }) => Promise<void>;
   /** Clear conversation history */
   clearConversation: () => Promise<void>;
+  /** Set messages directly (useful for loading history from external source like localStorage) */
+  setMessages: (messages: ChatMessage[]) => void;
   /** Cancel current stream */
   cancelStream: () => void;
   /** Retry last message */

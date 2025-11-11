@@ -5,9 +5,9 @@
  * stateless chat applications with zero server memory usage.
  */
 
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
 import {
   useOpenRouterChat,
   saveHistory,
@@ -15,17 +15,17 @@ import {
   clearHistory,
   listConversations,
   type ChatMessage,
-} from '@openrouter-dotnet/react';
-import { MessageList } from '@/components/chat/MessageList';
-import { ChatInput } from '@/components/chat/ChatInput';
+} from "@openrouter-dotnet/react";
+import { MessageList } from "@/components/chat/MessageList";
+import { ChatInput } from "@/components/chat/ChatInput";
 
-const DEFAULT_MODEL = 'anthropic/claude-3.5-sonnet';
-const CURRENT_CONV_KEY = 'stateless_chat_current_conversation';
+const DEFAULT_MODEL = "anthropic/claude-3.5-sonnet";
+const CURRENT_CONV_KEY = "stateless_chat_current_conversation";
 
 export function StatelessChatInterface() {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const [conversationId, setConversationId] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       return localStorage.getItem(CURRENT_CONV_KEY) || `conv_${Date.now()}`;
     }
     return `conv_${Date.now()}`;
@@ -34,20 +34,20 @@ export function StatelessChatInterface() {
   // Initialize hook WITHOUT server-side history
   const { state, actions } = useOpenRouterChat({
     endpoints: {
-      stream: '/api/stream-stateless', // New stateless endpoint
+      stream: "/api/stream-stateless", // New stateless endpoint
     },
     defaultModel: DEFAULT_MODEL,
   });
 
   // Load history from localStorage on mount and when conversationId changes
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     const savedHistory = loadHistory(conversationId);
-    if (savedHistory.length > 0) {
-      // We can't directly set the hook's state, but we'll send it with the first message
-      console.log(`Loaded ${savedHistory.length} messages from localStorage`);
-    }
+    console.log(`Loaded ${JSON.stringify(savedHistory)} messages from localStorage`);
+    
+    // Populate the hook's state with loaded history
+    actions.setMessages(savedHistory);
 
     // Save current conversation ID
     localStorage.setItem(CURRENT_CONV_KEY, conversationId);
@@ -55,7 +55,7 @@ export function StatelessChatInterface() {
 
   // Auto-save history whenever state.messages changes
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     if (state.messages.length > 0) {
       saveHistory(conversationId, state.messages, {
         maxMessages: 100, // Limit to prevent quota issues
@@ -75,7 +75,7 @@ export function StatelessChatInterface() {
       history: currentHistory, // Pass custom history from localStorage
     });
 
-    setInput('');
+    setInput("");
   };
 
   const handleNewConversation = () => {
@@ -90,7 +90,8 @@ export function StatelessChatInterface() {
     actions.clearConversation();
   };
 
-  const conversationList = typeof window !== 'undefined' ? listConversations() : [];
+  const conversationList =
+    typeof window !== "undefined" ? listConversations() : [];
 
   return (
     <div className="flex h-screen bg-gradient-to-br from-purple-50 via-slate-50 to-white">
@@ -121,11 +122,11 @@ export function StatelessChatInterface() {
               onClick={() => setConversationId(id)}
               className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                 id === conversationId
-                  ? 'bg-purple-100 text-purple-900 font-medium'
-                  : 'text-gray-700 hover:bg-gray-100'
+                  ? "bg-purple-100 text-purple-900 font-medium"
+                  : "text-gray-700 hover:bg-gray-100"
               }`}
             >
-              {id.replace('openrouter_chat_', '').slice(0, 20)}...
+              {id.replace("openrouter_chat_", "").slice(0, 20)}...
             </button>
           ))}
         </div>
@@ -167,7 +168,8 @@ export function StatelessChatInterface() {
             Stateless Chat Demo
           </h1>
           <p className="text-sm text-gray-600 mt-1">
-            Zero server memory • localStorage persistence • Horizontally scalable
+            Zero server memory • localStorage persistence • Horizontally
+            scalable
           </p>
         </div>
 
@@ -195,11 +197,14 @@ export function StatelessChatInterface() {
                   Start a Stateless Conversation
                 </h2>
                 <p className="text-gray-600 mb-4">
-                  This demo uses <strong>client-side history</strong> stored in localStorage.
-                  The server maintains zero state between requests.
+                  This demo uses <strong>client-side history</strong> stored in
+                  localStorage. The server maintains zero state between
+                  requests.
                 </p>
                 <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 text-left">
-                  <h3 className="font-semibold text-purple-900 mb-2">Benefits:</h3>
+                  <h3 className="font-semibold text-purple-900 mb-2">
+                    Benefits:
+                  </h3>
                   <ul className="text-sm text-purple-800 space-y-1">
                     <li>✓ No server memory usage</li>
                     <li>✓ Survives server restarts</li>
@@ -210,7 +215,10 @@ export function StatelessChatInterface() {
               </div>
             </div>
           ) : (
-            <MessageList messages={state.messages} isStreaming={state.isStreaming} />
+            <MessageList
+              messages={state.messages}
+              isStreaming={state.isStreaming}
+            />
           )}
         </div>
 

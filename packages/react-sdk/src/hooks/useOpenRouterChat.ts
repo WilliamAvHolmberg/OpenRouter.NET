@@ -187,21 +187,22 @@ export function useOpenRouterChat({
         }
 
         // Build request payload
+        const { history, model, ...otherOptions } = options || {};
         const requestPayload: any = {
-          ...options,
+          ...otherOptions,
           message,
-          model: options?.model || defaultModel,
+          model: model || defaultModel,
           conversationId: conversationIdRef.current,
         };
 
         // Handle conversation history
-        if (options?.history) {
+        if (history) {
           let historyToSend: ChatMessage[];
 
-          if (Array.isArray(options.history)) {
+          if (Array.isArray(history)) {
             // Use custom history provided by user (e.g., from localStorage)
-            historyToSend = options.history;
-          } else if (options.history === true) {
+            historyToSend = history;
+          } else if (history === true) {
             // Use hook's internal message state (excluding the assistant message we just added)
             historyToSend = messages.concat([userMessage]);
           } else {
@@ -406,13 +407,17 @@ export function useOpenRouterChat({
 
   /**
    * Clear conversation
+   * - If clearConversation endpoint is configured: calls backend (server-side history)
+   * - If no endpoint: just clears local state (client-side history)
    */
   const clearConversation = useCallback(async () => {
     try {
-      if (!clientRef.current) {
-        throw new Error('Client not initialized');
+      // Only call backend if endpoint is configured (server-side history pattern)
+      if (endpoints.clearConversation && clientRef.current) {
+        await clientRef.current.clearConversation(conversationIdRef.current);
       }
-      await clientRef.current.clearConversation(conversationIdRef.current);
+      
+      // Always clear local state (works for both patterns)
       setMessages([]);
       setError(null);
       // Generate new conversation ID
@@ -420,6 +425,13 @@ export function useOpenRouterChat({
     } catch (err) {
       console.error('Failed to clear conversation:', err);
     }
+  }, [endpoints]);
+
+  /**
+   * Set messages directly (useful for loading history from external source)
+   */
+  const setMessagesAction = useCallback((newMessages: ChatMessage[]) => {
+    setMessages(newMessages);
   }, []);
 
   /**
@@ -458,6 +470,7 @@ export function useOpenRouterChat({
   const actions: ChatActions = {
     sendMessage,
     clearConversation,
+    setMessages: setMessagesAction,
     cancelStream,
     retry,
   };

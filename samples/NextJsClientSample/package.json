@@ -8,7 +8,7 @@
     "start": "next start"
   },
   "dependencies": {
-    "@openrouter-dotnet/react": "file:../../packages/react-sdk/openrouter-dotnet-react-0.3.2.tgz",
+    "@openrouter-dotnet/react": "file:../../packages/react-sdk",
     "next": "16.0.0",
     "react": "19.2.0",
     "react-dom": "19.2.0",

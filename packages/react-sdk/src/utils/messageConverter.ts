@@ -30,10 +30,13 @@ export interface BackendToolCall {
  * Flattens the block-based UI model into the OpenRouter API format:
  * - Text blocks become message content
  * - Tool call blocks become tool_calls array
+ * - Completed tools generate separate tool result messages
  * - Artifacts are included as text (for now)
  */
 export function convertToBackendMessages(chatMessages: ChatMessage[]): BackendMessage[] {
-  return chatMessages.map((msg) => {
+  const result: BackendMessage[] = [];
+
+  for (const msg of chatMessages) {
     const backendMsg: BackendMessage = {
       role: msg.role,
     };
@@ -52,16 +55,14 @@ export function convertToBackendMessages(chatMessages: ChatMessage[]): BackendMe
     ) as ToolCallBlock[];
 
     if (toolBlocks.length > 0 && msg.role === 'assistant') {
-      backendMsg.tool_calls = toolBlocks
-        .filter((tb) => tb.status === 'completed' || tb.status === 'executing')
-        .map((tb) => ({
-          id: tb.toolId,
-          type: 'function',
-          function: {
-            name: tb.toolName,
-            arguments: tb.arguments,
-          },
-        }));
+      backendMsg.tool_calls = toolBlocks.map((tb) => ({
+        id: tb.toolId,
+        type: 'function',
+        function: {
+          name: tb.toolName,
+          arguments: tb.arguments,
+        },
+      }));
     }
 
     // Include artifacts as text (for conversation context)
@@ -83,6 +84,18 @@ export function convertToBackendMessages(chatMessages: ChatMessage[]): BackendMe
       }
     }
 
-    return backendMsg;
-  });
+    result.push(backendMsg);
+
+    // CRITICAL: Add tool result messages after assistant message with tool calls
+    const completedTools = toolBlocks.filter((tb) => tb.status === 'completed' && tb.result !== undefined);
+    for (const tool of completedTools) {
+      result.push({
+        role: 'tool',
+        tool_call_id: tool.toolId,
+        content: typeof tool.result === 'string' ? tool.result : JSON.stringify(tool.result),
+      });
+    }
+  }
+
+  return result;
 }

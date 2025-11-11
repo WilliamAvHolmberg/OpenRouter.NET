@@ -258,6 +258,13 @@ app.MapPost("/api/stream-stateless", async (ChatRequest chatRequest, HttpContext
             request.EnableArtifacts(enabled);
         }
     }
+    else
+    {
+        // Enable default artifact support for code and documents
+        request.EnableArtifactSupport(
+            customInstructions: "Create artifacts for code examples, scripts, or any deliverable content."
+        );
+    }
 
     // Stream response - no history persistence on server!
     var newMessages = await client.StreamAsSseAsync(request, context.Response);

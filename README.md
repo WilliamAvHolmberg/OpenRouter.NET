@@ -278,6 +278,8 @@ await foreach (var chunk in client.StreamAsync(request))
 
 ### Conversation (Multi-turn)
 
+#### Server-Side History Pattern (Simple)
+
 ```csharp
 using OpenRouter.NET;
 using OpenRouter.NET.Models;
@@ -307,6 +309,108 @@ request.Messages = conversationHistory;
 response = await client.CreateChatCompletionAsync(request);
 Console.WriteLine(response.Choices[0].Message.Content?.ToString() ?? "No response");
 ```
+
+#### Client-Side History Pattern (Production-Ready, Stateless)
+
+For production applications, you can implement **zero-server-memory architecture** by managing conversation history on the client:
+
+**Backend (ASP.NET Core):**
+```csharp
+app.MapPost("/api/stream-stateless", async (ChatRequest chatRequest, HttpContext context) =>
+{
+    var client = new OpenRouterClient(apiKey);
+    
+    List<Message> messagesToSend;
+    
+    if (chatRequest.Messages != null && chatRequest.Messages.Count > 0)
+    {
+        // Client provides full history - server is stateless!
+        messagesToSend = new List<Message>(chatRequest.Messages);
+        messagesToSend.Add(Message.FromUser(chatRequest.Message));
+    }
+    else
+    {
+        // First message in conversation
+        messagesToSend = new List<Message>
+        {
+            Message.FromSystem("You are a helpful assistant."),
+            Message.FromUser(chatRequest.Message)
+        };
+    }
+    
+    var request = new ChatCompletionRequest
+    {
+        Model = chatRequest.Model ?? "anthropic/claude-3.5-sonnet",
+        Messages = messagesToSend
+    };
+    
+    // Stream response - NO server-side storage!
+    await client.StreamAsSseAsync(request, context.Response);
+});
+
+record ChatRequest(string Message, string? Model = null)
+{
+    public List<Message>? Messages { get; init; }
+}
+```
+
+**Frontend (React/Next.js with TypeScript):**
+```typescript
+import { 
+  useOpenRouterChat, 
+  saveHistory, 
+  loadHistory 
+} from '@openrouter-dotnet/react';
+
+function StatelessChat() {
+  const [conversationId] = useState(`conv_${Date.now()}`);
+  
+  const { state, actions } = useOpenRouterChat({
+    endpoints: { stream: '/api/stream-stateless' },
+    defaultModel: 'anthropic/claude-3.5-sonnet'
+  });
+  
+  // Load history when conversation changes
+  useEffect(() => {
+    const savedHistory = loadHistory(conversationId);
+    actions.setMessages(savedHistory); // Populate hook state
+  }, [conversationId]);
+  
+  // Auto-save after each message
+  useEffect(() => {
+    if (state.messages.length > 0) {
+      saveHistory(conversationId, state.messages);
+    }
+  }, [state.messages, conversationId]);
+  
+  const handleSend = async (input: string) => {
+    const currentHistory = loadHistory(conversationId);
+    
+    // Send with full history from localStorage
+    await actions.sendMessage(input, {
+      history: currentHistory
+    });
+  };
+  
+  return <MessageList messages={state.messages} />;
+}
+```
+
+**Benefits of Client-Side History:**
+- ✅ **Zero server memory** - scales infinitely
+- ✅ **Survives server restarts** - no data loss
+- ✅ **No session affinity** - any server can handle any request
+- ✅ **Natural limits** - browser storage quota prevents unbounded growth
+- ✅ **User privacy** - conversations stay on device
+
+**How it works:**
+1. Client loads conversation history from localStorage
+2. Client sends full history + new message to backend
+3. Backend processes request (stateless - no storage)
+4. Client receives response and saves to localStorage
+5. Tool calls are automatically included in history
+
+See [STATELESS_CHAT_README.md](samples/NextJsClientSample/STATELESS_CHAT_README.md) for complete implementation guide.
 
 ## Samples
 
