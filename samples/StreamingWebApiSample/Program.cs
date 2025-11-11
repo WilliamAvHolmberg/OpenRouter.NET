@@ -176,6 +176,95 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
 })
 .WithName("Stream");
 
+// ============================================================================
+// STATELESS CHAT ENDPOINT - Client-Side History Pattern
+// ============================================================================
+// This endpoint demonstrates a production-ready stateless architecture:
+// - Zero server memory usage (no conversationStore)
+// - Client sends full conversation history with each request
+// - Horizontally scalable (no session affinity needed)
+// - Survives server restarts without losing conversations
+// ============================================================================
+
+app.MapPost("/api/stream-stateless", async (ChatRequest chatRequest, HttpContext context) =>
+{
+    var client = new OpenRouterClient(apiKey);
+
+    // Register tools (same as regular endpoint)
+    client
+        .RegisterTool<AddTool>()
+        .RegisterTool<SubtractTool>()
+        .RegisterTool<MultiplyTool>()
+        .RegisterTool<DivideTool>();
+
+    // ⚠️ CRITICAL: NO conversationStore usage - purely stateless!
+    // Client must provide history via chatRequest.Messages
+
+    List<Message> messagesToSend;
+
+    if (chatRequest.Messages != null && chatRequest.Messages.Count > 0)
+    {
+        // Client-side history pattern: Use history from client
+        Console.WriteLine($"[STATELESS] Received {chatRequest.Messages.Count} messages from client");
+        messagesToSend = new List<Message>(chatRequest.Messages);
+        messagesToSend.Add(Message.FromUser(chatRequest.Message));
+    }
+    else
+    {
+        // No history provided - start fresh conversation
+        Console.WriteLine("[STATELESS] No history provided, starting new conversation");
+        messagesToSend = new List<Message>
+        {
+            Message.FromSystem("You are a helpful assistant."),
+            Message.FromUser(chatRequest.Message)
+        };
+    }
+
+    var request = new ChatCompletionRequest
+    {
+        Model = chatRequest.Model ?? "anthropic/claude-3.5-sonnet",
+        Messages = messagesToSend
+    };
+
+    // Enable artifacts if requested
+    if (chatRequest.EnabledArtifacts != null)
+    {
+        var enabled = chatRequest.EnabledArtifacts
+            .Where(a => a != null && (a.Enabled == null || a.Enabled == true))
+            .Select(a =>
+            {
+                var type = string.IsNullOrWhiteSpace(a!.Type) ? "code" : a.Type!;
+                var def = Artifacts.Custom(type, a.PreferredTitle);
+                if (!string.IsNullOrWhiteSpace(a.Language)) def.WithLanguage(a.Language!);
+                if (!string.IsNullOrWhiteSpace(a.Instruction)) def.WithInstruction(a.Instruction!);
+                if (!string.IsNullOrWhiteSpace(a.OutputFormat)) def.WithOutputFormat(a.OutputFormat!);
+                if (a.Attributes != null)
+                {
+                    foreach (var kv in a.Attributes)
+                    {
+                        def.WithAttribute(kv.Key, kv.Value);
+                    }
+                }
+                return (ArtifactDefinition)def;
+            })
+            .ToArray();
+
+        if (enabled.Length > 0)
+        {
+            request.EnableArtifacts(enabled);
+        }
+    }
+
+    // Stream response - no history persistence on server!
+    var newMessages = await client.StreamAsSseAsync(request, context.Response);
+
+    // ⚠️ CRITICAL: We DON'T save newMessages to any server-side store
+    // Client is responsible for persisting the conversation history
+    Console.WriteLine($"[STATELESS] Streamed {newMessages.Count} response messages. Server memory: 0 bytes");
+})
+.WithName("StreamStateless")
+.WithMetadata(new { Description = "Stateless chat endpoint with client-side history management" });
+
 app.MapPost("/api/dashboard/stream", async (DashboardChatRequest chatRequest, HttpContext context) =>
 {
     var client = new OpenRouterClient(apiKey);
