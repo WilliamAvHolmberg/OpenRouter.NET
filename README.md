@@ -94,6 +94,7 @@ const { object } = useGenerateObject({
 📄 Artifact support with incremental parsing
 ⚡ Async enumerable streaming (IAsyncEnumerable)
 🛡️ Circular reference protection in schema generation
+📊 **Built-in observability** with OpenTelemetry (Arize Phoenix, Jaeger, etc.)
 
 ## Installation
 
@@ -307,6 +308,54 @@ request.Messages = conversationHistory;
 response = await client.CreateChatCompletionAsync(request);
 Console.WriteLine(response.Choices[0].Message.Content?.ToString() ?? "No response");
 ```
+
+## Observability & Monitoring
+
+OpenRouter.NET includes comprehensive observability support using **OpenTelemetry**, enabling you to track LLM API calls, token usage, performance metrics, and more with platforms like **Arize Phoenix**, **Jaeger**, or any OpenTelemetry-compatible backend.
+
+### Quick Setup
+
+```csharp
+using OpenRouter.NET;
+using OpenRouter.NET.Observability;
+using OpenTelemetry.Trace;
+
+// Configure OpenTelemetry with Phoenix/Jaeger/etc.
+var tracerProvider = Sdk.CreateTracerProviderBuilder()
+    .AddOpenRouterInstrumentation()
+    .AddOtlpExporter(options =>
+    {
+        options.Endpoint = new Uri("http://localhost:4317");
+    })
+    .Build();
+
+// Enable telemetry in client
+var client = new OpenRouterClient(new OpenRouterClientOptions
+{
+    ApiKey = "your-api-key",
+    Telemetry = new OpenRouterTelemetryOptions
+    {
+        EnableTelemetry = true,
+        CapturePrompts = true,       // Log input prompts
+        CaptureCompletions = true,   // Log outputs
+        CaptureToolDetails = true    // Log tool execution
+    }
+});
+
+// All API calls are now automatically traced!
+```
+
+### Features
+
+- ✅ **Request/Response Tracing** - Track all LLM API calls with detailed attributes
+- ✅ **Token Usage Tracking** - Monitor input/output tokens and costs
+- ✅ **Streaming Metrics** - Time-to-first-token, tokens/sec, duration
+- ✅ **Tool Execution Spans** - Child spans for tool calls with arguments/results
+- ✅ **Error Tracking** - Automatic exception recording
+- ✅ **Privacy Controls** - Opt-in capture with sanitization callbacks
+- ✅ **Zero Overhead** - No performance impact when disabled
+
+**[📊 Full Observability Guide](./docs/OBSERVABILITY.md)** - Complete setup guide with Phoenix, configuration options, and best practices.
 
 ## Samples
 

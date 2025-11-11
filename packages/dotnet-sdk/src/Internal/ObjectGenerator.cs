@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Json.Schema;
 using OpenRouter.NET.Models;
+using OpenRouter.NET.Observability;
 using OpenRouter.NET.Tools;
 
 namespace OpenRouter.NET.Internal;
@@ -15,16 +17,19 @@ internal class ObjectGenerator
     private readonly Func<ChatCompletionRequest, CancellationToken, Task<ChatCompletionResponse>> _createCompletionAsync;
     private readonly JsonSerializerOptions _jsonOptions;
     private readonly Action<string>? _logCallback;
+    private readonly OpenRouterTelemetryOptions _telemetryOptions;
     private static readonly ConcurrentDictionary<Type, JsonElement> _schemaCache = new ConcurrentDictionary<Type, JsonElement>();
 
     public ObjectGenerator(
         Func<ChatCompletionRequest, CancellationToken, Task<ChatCompletionResponse>> createCompletionAsync,
         JsonSerializerOptions jsonOptions,
-        Action<string>? logCallback = null)
+        Action<string>? logCallback = null,
+        OpenRouterTelemetryOptions? telemetryOptions = null)
     {
         _createCompletionAsync = createCompletionAsync ?? throw new ArgumentNullException(nameof(createCompletionAsync));
         _jsonOptions = jsonOptions ?? throw new ArgumentNullException(nameof(jsonOptions));
         _logCallback = logCallback;
+        _telemetryOptions = telemetryOptions ?? OpenRouterTelemetryOptions.Default;
     }
 
     /// <summary>
@@ -43,15 +48,29 @@ internal class ObjectGenerator
         if (string.IsNullOrWhiteSpace(model))
             throw new ArgumentException("Model cannot be empty", nameof(model));
 
-        options ??= new GenerateObjectOptions();
+        // Start telemetry span if enabled
+        using var activity = _telemetryOptions.EnableTelemetry
+            ? OpenRouterActivitySource.Instance.StartActivity(GenAiSemanticConventions.SpanNameGenerateObject, ActivityKind.Client)
+            : null;
 
-        var schemaJson = schema.GetRawText();
-        var schemaSizeBytes = Encoding.UTF8.GetByteCount(schemaJson);
-
-        if (schemaSizeBytes > options.SchemaWarningThresholdBytes)
+        try
         {
-            Log($"WARNING: Schema size ({schemaSizeBytes} bytes) exceeds threshold ({options.SchemaWarningThresholdBytes} bytes). This may impact performance.");
-        }
+            options ??= new GenerateObjectOptions();
+
+            var schemaJson = schema.GetRawText();
+            var schemaSizeBytes = Encoding.UTF8.GetByteCount(schemaJson);
+
+            if (activity != null)
+            {
+                activity.SetTag(GenAiSemanticConventions.AttributeOperationName, GenAiSemanticConventions.OperationGenerateObject);
+                activity.SetTag(GenAiSemanticConventions.AttributeSchemaSizeBytes, schemaSizeBytes);
+                activity.SetTag(GenAiSemanticConventions.AttributeRequestModel, model);
+            }
+
+            if (schemaSizeBytes > options.SchemaWarningThresholdBytes)
+            {
+                Log($"WARNING: Schema size ({schemaSizeBytes} bytes) exceeds threshold ({options.SchemaWarningThresholdBytes} bytes). This may impact performance.");
+            }
 
         var toolName = "generate_structured_output";
         var tool = Tool.CreateFunctionTool(
@@ -66,6 +85,11 @@ internal class ObjectGenerator
         {
             try
             {
+                if (activity != null)
+                {
+                    activity.SetTag(GenAiSemanticConventions.AttributeValidationAttempt, attempt + 1);
+                }
+
                 var request = new ChatCompletionRequest
                 {
                     Model = model,
@@ -98,6 +122,12 @@ internal class ObjectGenerator
 
                 Log($"Successfully generated structured object on attempt {attempt + 1}");
 
+                if (activity != null)
+                {
+                    activity.SetTag(GenAiSemanticConventions.AttributeValidationSuccess, true);
+                    activity.SetStatus(ActivityStatusCode.Ok);
+                }
+
                 return new GenerateObjectResult
                 {
                     Object = generatedObject,
@@ -110,13 +140,34 @@ internal class ObjectGenerator
                 lastException = ex;
                 var delayMs = (int)Math.Pow(2, attempt) * 1000;
                 Log($"GenerateObject attempt {attempt + 1} failed: {ex.Message}. Retrying in {delayMs}ms...");
+
+                if (activity != null)
+                {
+                    activity.SetTag(GenAiSemanticConventions.AttributeValidationError, ex.Message);
+                }
+
                 await Task.Delay(delayMs, cancellationToken);
             }
+        }
+
+        if (activity != null)
+        {
+            activity.SetTag(GenAiSemanticConventions.AttributeValidationSuccess, false);
+            TelemetryHelper.RecordException(activity, lastException!);
         }
 
         throw new OpenRouterException(
             $"Failed to generate structured object after {options.MaxRetries} attempts. Last error: {lastException?.Message}",
             lastException!);
+        }
+        catch (Exception ex)
+        {
+            if (activity != null)
+            {
+                TelemetryHelper.RecordException(activity, ex);
+            }
+            throw;
+        }
     }
 
     /// <summary>

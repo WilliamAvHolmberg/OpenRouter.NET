@@ -1,5 +1,7 @@
+using System.Diagnostics;
 using System.Text.Json;
 using OpenRouter.NET.Models;
+using OpenRouter.NET.Observability;
 
 namespace OpenRouter.NET.Tools;
 
@@ -12,10 +14,12 @@ internal class ToolManager
     private readonly Dictionary<string, Func<string, object>> _toolImplementations = new Dictionary<string, Func<string, object>>();
     private readonly Dictionary<string, ToolRegistration> _toolRegistry = new Dictionary<string, ToolRegistration>();
     private readonly JsonSerializerOptions _jsonOptions;
+    private readonly OpenRouterTelemetryOptions _telemetryOptions;
 
-    public ToolManager(JsonSerializerOptions jsonOptions)
+    public ToolManager(JsonSerializerOptions jsonOptions, OpenRouterTelemetryOptions? telemetryOptions = null)
     {
         _jsonOptions = jsonOptions ?? throw new ArgumentNullException(nameof(jsonOptions));
+        _telemetryOptions = telemetryOptions ?? OpenRouterTelemetryOptions.Default;
     }
 
     /// <summary>
@@ -52,13 +56,55 @@ internal class ToolManager
     /// </summary>
     public object ExecuteTool(string name, string arguments)
     {
-        if (!_toolImplementations.TryGetValue(name, out var implementation))
-        {
-            throw new InvalidOperationException($"Tool '{name}' is not registered");
-        }
+        // Start telemetry span if enabled
+        using var activity = _telemetryOptions.EnableTelemetry
+            ? OpenRouterActivitySource.Instance.StartActivity(GenAiSemanticConventions.SpanNameToolCall, ActivityKind.Internal)
+            : null;
 
-        var validatedArguments = ValidateAndNormalizeArguments(arguments);
-        return implementation(validatedArguments);
+        try
+        {
+            if (activity != null)
+            {
+                activity.SetTag(GenAiSemanticConventions.AttributeToolName, name);
+                activity.SetTag(GenAiSemanticConventions.AttributeToolExecutionMode, "auto_execute");
+
+                if (_telemetryOptions.CaptureToolDetails)
+                {
+                    var sanitized = _telemetryOptions.SanitizeToolArguments?.Invoke(arguments) ?? arguments;
+                    activity.SetTag(GenAiSemanticConventions.AttributeToolArguments, sanitized);
+                }
+            }
+
+            if (!_toolImplementations.TryGetValue(name, out var implementation))
+            {
+                throw new InvalidOperationException($"Tool '{name}' is not registered");
+            }
+
+            var validatedArguments = ValidateAndNormalizeArguments(arguments);
+            var result = implementation(validatedArguments);
+
+            // Capture result if telemetry enabled
+            if (activity != null)
+            {
+                activity.SetStatus(ActivityStatusCode.Ok);
+                if (_telemetryOptions.CaptureToolDetails && result != null)
+                {
+                    var resultJson = JsonSerializer.Serialize(result, _jsonOptions);
+                    activity.SetTag(GenAiSemanticConventions.AttributeToolResult, resultJson);
+                }
+            }
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            if (activity != null)
+            {
+                TelemetryHelper.RecordException(activity, ex);
+                activity.SetTag(GenAiSemanticConventions.AttributeToolError, ex.Message);
+            }
+            throw;
+        }
     }
 
     /// <summary>
