@@ -1,0 +1,455 @@
+
+OPENROUTER.NET SDK - COMPREHENSIVE USAGE GUIDE
+================================================
+
+METADATA
+--------
+Title: OpenRouter.NET SDK - Complete Reference Guide
+Version: 1.0.0+
+.NET Requirements: .NET 6.0 or higher
+Primary Namespace: OpenRouter.NET
+Repository: OpenRouter.NET (C# SDK for OpenRouter API)
+
+OVERVIEW
+--------
+OpenRouter.NET is a comprehensive C# SDK for interacting with the OpenRouter API. It provides:
+- Full support for chat completions with streaming
+- Tool/function calling capabilities
+- Server-Sent Events (SSE) streaming
+- Artifact support for code, text, and images
+- Conversation management
+- Flexible model selection and routing
+- Request/response validation
+- Error handling and retry logic
+
+The SDK is designed to be intuitive for .NET developers while providing access to all OpenRouter API features.
+
+GETTING STARTED
+===============
+
+Installation
+-----------
+Install via NuGet:
+  dotnet add package OpenRouter.NET
+
+Required Using Statements
+--------------------------
+using OpenRouter.NET;
+using OpenRouter.NET.Models;
+using OpenRouter.NET.Sse;
+using OpenRouter.NET.Tools;
+using OpenRouter.NET.Extensions;
+
+Basic Setup
+-----------
+The SDK requires an OpenRouter API key. Set it as an environment variable:
+  export OPENROUTER_API_KEY="your-api-key-here"
+
+Or pass it directly when creating the client:
+  var client = new OpenRouterClient("your-api-key-here");
+
+CORE CLIENT USAGE
+=================
+
+OpenRouterClient Class
+---------------------
+The main entry point for all SDK functionality.
+
+Constructor:
+  public OpenRouterClient(string? apiKey = null)
+  
+  - If apiKey is null, reads from OPENROUTER_API_KEY environment variable
+  - Throws ArgumentException if no API key is provided or found
+
+Configuration
+-----------
+The client uses sensible defaults but can be customized:
+
+Default Configuration:
+  - Base URL: https://openrouter.ai/api/v1
+  - Timeout: 30 seconds
+  - Retry Policy: Exponential backoff with max 3 retries
+  - Model: gpt-3.5-turbo (can be overridden per request)
+
+Example: Basic Chat Completion
+------------------------------
+var client = new OpenRouterClient();
+
+var response = await client.CreateChatCompletionAsync(new ChatCompletionRequest
+{
+    Model = "openai/gpt-4",
+    Messages = new[]
+    {
+        new ChatMessage { Role = "user", Content = "What is 2+2?" }
+    }
+});
+
+Console.WriteLine(response.Choices[0].Message.Content);
+
+CHAT COMPLETION REQUESTS
+========================
+
+ChatCompletionRequest Class
+---------------------------
+Represents a request to create a chat completion.
+
+Key Properties:
+  - Model (string): The model to use (e.g., "openai/gpt-4", "anthropic/claude-3-opus")
+  - Messages (ChatMessage[]): Array of messages in the conversation
+  - Temperature (float?): Controls randomness (0.0-2.0, default 1.0)
+  - MaxTokens (int?): Maximum tokens in the response
+  - TopP (float?): Nucleus sampling parameter (0.0-1.0)
+  - TopK (int?): Top-K sampling parameter
+  - FrequencyPenalty (float?): Reduces repetition (-2.0 to 2.0)
+  - PresencePenalty (float?): Encourages new topics (-2.0 to 2.0)
+  - Stop (string[]?): Stop sequences
+  - Tools (Tool[]?): Available tools for function calling
+  - ToolChoice (string?): "auto", "required", or specific tool name
+  - ResponseFormat (ResponseFormat?): For structured outputs
+  - Seed (int?): For reproducible outputs
+  - Provider (ProviderConfig?): Provider-specific settings
+
+ChatMessage Class
+-----------------
+Represents a single message in a conversation.
+
+Properties:
+  - Role (string): "system", "user", "assistant", or "tool"
+  - Content (string?): The message content
+  - ToolCalls (ToolCall[]?): Tool calls made by the assistant
+  - ToolCallId (string?): ID of the tool call this message responds to
+  - Name (string?): Name of the tool (for tool messages)
+
+Example: Multi-turn Conversation
+--------------------------------
+var client = new OpenRouterClient();
+
+var messages = new List<ChatMessage>
+{
+    new ChatMessage { Role = "system", Content = "You are a helpful assistant." },
+    new ChatMessage { Role = "user", Content = "What is the capital of France?" },
+};
+
+var response = await client.CreateChatCompletionAsync(new ChatCompletionRequest
+{
+    Model = "openai/gpt-4",
+    Messages = messages.ToArray()
+});
+
+var assistantMessage = response.Choices[0].Message;
+messages.Add(assistantMessage);
+
+// Continue conversation
+messages.Add(new ChatMessage { Role = "user", Content = "What is its population?" });
+
+var response2 = await client.CreateChatCompletionAsync(new ChatCompletionRequest
+{
+    Model = "openai/gpt-4",
+    Messages = messages.ToArray()
+});
+
+ChatCompletionResponse Class
+----------------------------
+Represents the response from a chat completion request.
+
+Key Properties:
+  - Id (string): Unique identifier for the completion
+  - Object (string): Always "chat.completion"
+  - Created (long): Unix timestamp of creation
+  - Model (string): The model used
+  - Choices (Choice[]): Array of completion choices
+  - Usage (Usage): Token usage information
+  - SystemFingerprint (string?): System fingerprint for reproducibility
+
+Choice Class
+-----------
+Represents a single completion choice.
+
+Properties:
+  - Index (int): Index in the choices array
+  - Message (ChatMessage): The generated message
+  - FinishReason (string): "stop", "length", "tool_calls", or "content_filter"
+  - LogProbs (object?): Log probabilities (if requested)
+
+Usage Class
+-----------
+Token usage information.
+
+Properties:
+  - PromptTokens (int): Tokens in the prompt
+  - CompletionTokens (int): Tokens in the completion
+  - TotalTokens (int): Total tokens used
+
+STREAMING
+=========
+
+Streaming is a critical feature for real-time responses. The SDK provides two approaches:
+
+Approach 1: Async Enumerable (Recommended)
+------------------------------------------
+var client = new OpenRouterClient();
+
+await foreach (var chunk in client.CreateChatCompletionStreamAsync(new ChatCompletionRequest
+{
+    Model = "openai/gpt-4",
+    Messages = new[]
+    {
+        new ChatMessage { Role = "user", Content = "Write a short poem about coding" }
+    }
+}))
+{
+    if (chunk.Choices[0].Delta?.Content != null)
+    {
+        Console.Write(chunk.Choices[0].Delta.Content);
+    }
+}
+
+StreamingChatCompletionResponse Class
+-------------------------------------
+Represents a streaming chunk from the API.
+
+Key Properties:
+  - Id (string): Unique identifier for the stream
+  - Object (string): Always "chat.completion.chunk"
+  - Created (long): Unix timestamp
+  - Model (string): The model used
+  - Choices (StreamingChoice[]): Array of streaming choices
+
+StreamingChoice Class
+--------------------
+Properties:
+  - Index (int): Index in the choices array
+  - Delta (Delta): The incremental content
+  - FinishReason (string?): "stop" when stream ends
+  - LogProbs (object?): Log probabilities
+
+Delta Class
+-----------
+Represents incremental content in a stream.
+
+Properties:
+  - Role (string?): Role of the message (usually only in first chunk)
+  - Content (string?): Incremental text content
+  - ToolCalls (ToolCall[]?): Tool calls (if any)
+
+Example: Streaming with Cancellation
+------------------------------------
+var client = new OpenRouterClient();
+var cts = new CancellationTokenSource();
+cts.CancelAfter(TimeSpan.FromSeconds(30));
+
+try
+{
+    await foreach (var chunk in client.CreateChatCompletionStreamAsync(
+        new ChatCompletionRequest
+        {
+            Model = "openai/gpt-4",
+            Messages = new[]
+            {
+                new ChatMessage { Role = "user", Content = "Tell me a long story" }
+            }
+        },
+        cts.Token))
+    {
+        if (chunk.Choices[0].Delta?.Content != null)
+        {
+            Console.Write(chunk.Choices[0].Delta.Content);
+        }
+    }
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("Stream cancelled");
+}
+
+TOOL/FUNCTION CALLING
+====================
+
+Tool calling allows the model to request specific functions be executed. This is powerful for:
+- Retrieving real-time data
+- Performing calculations
+- Accessing external APIs
+- Creating structured workflows
+
+Tool Class
+---------
+Defines a tool the model can call.
+
+Properties:
+  - Type (string): Always "function"
+  - Function (ToolFunction): The function definition
+
+ToolFunction Class
+-----------------
+Properties:
+  - Name (string): Function name (alphanumeric, underscores, hyphens)
+  - Description (string): What the function does
+  - Parameters (ToolParameters): Function parameters schema
+
+ToolParameters Class
+-------------------
+Properties:
+  - Type (string): Always "object"
+  - Properties (Dictionary<string, ToolProperty>): Parameter definitions
+  - Required (string[]?): Required parameter names
+
+ToolProperty Class
+-----------------
+Properties:
+  - Type (string): "string", "number", "integer", "boolean", "array", "object"
+  - Description (string): Parameter description
+  - Enum (string[]?): Allowed values
+  - Items (ToolProperty?): For array types
+  - Properties (Dictionary<string, ToolProperty>?): For object types
+
+ToolCall Class
+--------------
+Represents a tool call made by the model.
+
+Properties:
+  - Id (string): Unique identifier for the tool call
+  - Type (string): Always "function"
+  - Function (ToolCallFunction): The function call details
+
+ToolCallFunction Class
+---------------------
+Properties:
+  - Name (string): Function name
+  - Arguments (string): JSON string of arguments
+
+Example: Weather Tool
+--------------------
+var client = new OpenRouterClient();
+
+var tools = new[]
+{
+    new Tool
+    {
+        Type = "function",
+        Function = new ToolFunction
+        {
+            Name = "get_weather",
+            Description = "Get the current weather for a location",
+            Parameters = new ToolParameters
+            {
+                Type = "object",
+                Properties = new Dictionary<string, ToolProperty>
+                {
+                    ["location"] = new ToolProperty
+                    {
+                        Type = "string",
+                        Description = "City name"
+                    },
+                    ["unit"] = new ToolProperty
+                    {
+                        Type = "string",
+                        Description = "Temperature unit",
+                        Enum = new[] { "celsius", "fahrenheit" }
+                    }
+                },
+                Required = new[] { "location" }
+            }
+        }
+    }
+};
+
+var response = await client.CreateChatCompletionAsync(new ChatCompletionRequest
+{
+    Model = "openai/gpt-4",
+    Messages = new[]
+    {
+        new ChatMessage { Role = "user", Content = "What's the weather in Paris?" }
+    },
+    Tools = tools,
+    ToolChoice = "auto"
+});
+
+// Check if model wants to call a tool
+if (response.Choices[0].Message.ToolCalls != null)
+{
+    foreach (var toolCall in response.Choices[0].Message.ToolCalls)
+    {
+        Console.WriteLine($"Tool: {toolCall.Function.Name}");
+        Console.WriteLine($"Arguments: {toolCall.Function.Arguments}");
+        
+        // Parse arguments and execute tool
+        var args = JsonSerializer.Deserialize<Dictionary<string, object>>(
+            toolCall.Function.Arguments);
+        
+        // Execute your tool logic here
+        var result = ExecuteWeatherTool(args);
+        
+        // Send result back to model
+        var messages = new List<ChatMessage>
+        {
+            new ChatMessage { Role = "user", Content = "What's the weather in Paris?" },
+            response.Choices[0].Message,
+            new ChatMessage
+            {
+                Role = "tool",
+                Content = result,
+                ToolCallId = toolCall.Id,
+                Name = toolCall.Function.Name
+            }
+        };
+        
+        var finalResponse = await client.CreateChatCompletionAsync(new ChatCompletionRequest
+        {
+            Model = "openai/gpt-4",
+            Messages = messages.ToArray(),
+            Tools = tools
+        });
+        
+        Console.WriteLine(finalResponse.Choices[0].Message.Content);
+    }
+}
+
+Tool Calling Best Practices
+---------------------------
+1. Always validate tool arguments before execution
+2. Use specific, descriptive function names
+3. Provide clear descriptions of what each tool does
+4. Include examples in descriptions for complex tools
+5. Handle tool call failures gracefully
+6. Set ToolChoice = "required" if you want guaranteed tool use
+7. Set ToolChoice = "auto" for optional tool use
+8. Set ToolChoice = "tool_name" to force a specific tool
+9. Always include tool results in the conversation for context
+
+ARTIFACTS
+=========
+
+Artifacts are a special feature for handling large content blocks like code, text, or images.
+
+Artifact Class
+--------------
+Properties:
+  - Type (string): "code", "text", "image", or "html"
+  - Language (string?): Programming language for code artifacts
+  - Title (string?): Display title
+  - Content (string): The artifact content
+
+Example: Code Artifact
+---------------------
+var client = new OpenRouterClient();
+
+var response = await client.CreateChatCompletionAsync(new ChatCompletionRequest
+{
+    Model = "openai/gpt-4",
+    Messages = new[]
+    {
+        new ChatMessage
+        {
+            Role = "user",
+            Content = "Write a C# function to calculate fibonacci numbers"
+        }
+    }
+});
+
+var content = response.Choices[0].Message.Content;
+
+// Check if response contains artifacts
+if (content.Contains("<artifact"))
+{
+    // Parse and handle artifact
+    var artifactMatch = Regex.Match(content, @"<artifact[^>]*type=""([^""]+)""[^>]*>(.+?)
