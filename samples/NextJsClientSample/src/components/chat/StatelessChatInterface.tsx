@@ -37,6 +37,19 @@ export function StatelessChatInterface() {
       stream: "/api/stream-stateless", // New stateless endpoint
     },
     defaultModel: DEFAULT_MODEL,
+    onClientTool: (event) => {
+      console.log("🔧 [CLIENT TOOL] Tool called:", event.toolName);
+      console.log("🔧 [CLIENT TOOL] Arguments:", event.arguments);
+      
+      // Handle client-side tools
+      if (event.toolName === "get_current_time") {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString();
+        console.log(`⏰ [CLIENT TOOL] Current time: ${timeString}`);
+        // Note: The tool result will be automatically added to history
+        // via the mocked tool_completed event from the backend
+      }
+    },
   });
 
   // Load history from localStorage on mount and when conversationId changes

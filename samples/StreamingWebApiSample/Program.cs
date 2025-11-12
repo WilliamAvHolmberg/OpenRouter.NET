@@ -200,6 +200,9 @@ app.MapPost("/api/stream-stateless", async (ChatRequest chatRequest, HttpContext
         .RegisterTool<SubtractTool>()
         .RegisterTool<MultiplyTool>()
         .RegisterTool<DivideTool>();
+    
+    // Register client-side tool for testing
+    client.RegisterTool<GetCurrentTimeTool>();
 
     // ⚠️ CRITICAL: NO conversationStore usage - purely stateless!
     // Client must provide history via chatRequest.Messages

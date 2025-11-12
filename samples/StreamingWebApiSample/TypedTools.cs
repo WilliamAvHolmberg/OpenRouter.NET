@@ -82,3 +82,18 @@ public class NotifyTool : VoidTool<NotifyParams>
         Console.WriteLine($"[{p.Level.ToUpper()}] {p.Message}");
     }
 }
+
+// Simple client-side tool for testing history persistence
+public class GetCurrentTimeTool : Tool<object, string>
+{
+    public override string Name => "get_current_time";
+    public override string Description => "Get the current time. Call this tool when the user asks for the time.";
+    public override ToolMode Mode => ToolMode.ClientSide;
+
+    protected override string Handle(object p)
+    {
+        // This will never be called on server since it's client-side
+        return DateTime.Now.ToString("HH:mm:ss");
+    }
+}
+
