@@ -170,12 +170,20 @@ app.MapPost("/api/stream", async (ChatRequest chatRequest, HttpContext context) 
         );
     }
 
-    var newMessages = await client.StreamAsSseAsync(request, context.Response);
+    var result = await client.StreamAsSseAsync(request, context.Response);
+
+    // Log telemetry
+    Console.WriteLine($"[TELEMETRY] Tokens: {result.Usage?.PromptTokens ?? 0}→{result.Usage?.CompletionTokens ?? 0} ({result.Usage?.TotalTokens ?? 0}) | " +
+                      $"TTFT: {result.TimeToFirstToken?.TotalMilliseconds ?? 0:F0}ms | " +
+                      $"Total: {result.TotalElapsed.TotalMilliseconds:F0}ms | " +
+                      $"Chunks: {result.ChunkCount} | " +
+                      $"Tools: {result.ToolExecutions.Count} | " +
+                      $"Artifacts: {result.ArtifactCount}");
 
     // Add all assistant and tool messages to conversation history (only for server-side pattern)
     if (serverSideHistory != null)
     {
-        serverSideHistory.AddRange(newMessages);
+        serverSideHistory.AddRange(result.Messages);
     }
 })
 .WithName("Stream");
@@ -274,7 +282,7 @@ app.MapPost("/api/stream-stateless", async (ChatRequest chatRequest, HttpContext
 
     // ⚠️ CRITICAL: We DON'T save newMessages to any server-side store
     // Client is responsible for persisting the conversation history
-    Console.WriteLine($"[STATELESS] Streamed {newMessages.Count} response messages. Server memory: 0 bytes");
+    Console.WriteLine($"[STATELESS] Streamed {newMessages.Messages.Count} response messages. Server memory: 0 bytes");
 })
 .WithName("StreamStateless")
 .WithMetadata(new { Description = "Stateless chat endpoint with client-side history management" });
@@ -497,7 +505,7 @@ Then call: add_widget_to_dashboard(artifactId=""chart-products-r8t2y"", ...)
 
     var newMessages = await client.StreamAsSseAsync(request, context.Response);
 
-    history.AddRange(newMessages);
+    history.AddRange(newMessages.Messages);
 })
 .WithName("DashboardStream");
 
