@@ -58,7 +58,7 @@ This creates a `.nupkg` file in the `nupkg` directory.
 ### 6. Publish to NuGet
 
 ```bash
-dotnet nuget push ./nupkg/OpenRouter.NET.0.3.2.nupkg \
+dotnet nuget push ./nupkg/OpenRouter.NET.0.6.1.nupkg \
   --api-key xxx \
   --source https://api.nuget.org/v3/index.json
 ```

@@ -72,6 +72,8 @@ public static class SseChunkMapper
         if (chunk.ClientTool != null)
         {
             var tool = chunk.ClientTool;
+            
+            // Emit tool_client event for frontend to execute
             events.Add(new ToolClientEvent
             {
                 Type = SseEventType.ToolClient,
@@ -80,6 +82,21 @@ public static class SseChunkMapper
                 ToolName = tool.ToolName,
                 ToolId = tool.ToolId,
                 Arguments = tool.Arguments
+            });
+            
+            // Immediately emit mocked tool_completed for history tracking
+            // Frontend needs this to mark tool as completed and include in conversation history
+            var mockedResult = $"Client-side tool '{tool.ToolName}' invoked with arguments: {tool.Arguments}";
+            events.Add(new ToolCompletedEvent
+            {
+                Type = SseEventType.ToolCompleted,
+                ChunkIndex = chunk.ChunkIndex,
+                ElapsedMs = elapsedMs,
+                ToolName = tool.ToolName,
+                ToolId = tool.ToolId,
+                Arguments = tool.Arguments,
+                Result = mockedResult,
+                ExecutionMs = 0
             });
         }
 
