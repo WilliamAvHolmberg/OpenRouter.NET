@@ -85,15 +85,48 @@ function SimpleChat() {
 Main hook for full chat functionality with artifacts and tools.
 
 **Options:**
-- `baseUrl: string` - Your API base URL
+- `endpoints: EndpointConfig` - API endpoints configuration
 - `conversationId?: string` - Optional conversation ID
 - `defaultModel?: string` - Default model to use
 - `config?: ClientConfig` - Client configuration
+- `onClientTool?: (event: ToolClientEvent) => void` - Callback for client-side tool execution
+- `onCompleted?: (event: CompletionEvent) => void` - Callback when message streaming completes
+- `onError?: (event: ErrorEvent) => void` - Callback when errors occur
+- `onArtifactCompleted?: (event: ArtifactCompletedEvent) => void` - Callback when artifacts complete
+- `onToolCompleted?: (event: ToolCompletedEvent) => void` - Callback when tools complete
+- `onToolError?: (event: ToolErrorEvent) => void` - Callback when tools fail
 
 **Returns:**
 - `state: ChatState` - Current chat state
 - `actions: ChatActions` - Chat actions
 - `debug: DebugControls` - Debug controls
+
+**Example with callbacks:**
+```tsx
+const { state, actions } = useOpenRouterChat({
+  endpoints: {
+    stream: '/api/stream',
+    clearConversation: '/api/conversation'
+  },
+  defaultModel: 'openai/gpt-4o',
+  onCompleted: (event) => {
+    console.log('Stream completed:', event.finishReason);
+    // Analytics, notifications, etc.
+  },
+  onError: (event) => {
+    console.error('Error occurred:', event.message);
+    // Error handling, logging, etc.
+  },
+  onArtifactCompleted: (event) => {
+    console.log('Artifact ready:', event.title);
+    // Save artifact, show preview, etc.
+  },
+  onToolCompleted: (event) => {
+    console.log('Tool executed:', event.toolName, event.result);
+    // Update UI, track tool usage, etc.
+  }
+});
+```
 
 #### `useStreamingText(options)`
 
