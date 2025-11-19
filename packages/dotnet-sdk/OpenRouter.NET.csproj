@@ -19,7 +19,7 @@
 
     <!-- NuGet Package Metadata -->
     <PackageId>OpenRouter.NET</PackageId>
-    <Version>0.7.1</Version>
+    <Version>0.7.2</Version>
     <Authors>William Holmberg</Authors>
     <Company>William Holmberg</Company>
     <Description>A .NET SDK for OpenRouter API - Unified interface for LLM APIs</Description>

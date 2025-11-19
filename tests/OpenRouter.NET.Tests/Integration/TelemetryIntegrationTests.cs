@@ -1,5 +1,6 @@
 using OpenRouter.NET.Models;
 using OpenRouter.NET.Sse;
+using OpenRouter.NET.Tools;
 using Xunit;
 using Xunit.Abstractions;
 using Microsoft.AspNetCore.Http;
@@ -159,6 +160,85 @@ public class TelemetryIntegrationTests : IntegrationTestBase
         {
             LogWarning("No artifacts created (model may not support artifacts)");
         }
+    }
+    
+    [Fact]
+    public async Task StreamAsSseAsync_WithClientSideTool_ShouldTrackToolExecution()
+    {
+        var client = CreateClient();
+        
+        client.RegisterTool<TestClientTool>();
+        
+        var request = new ChatCompletionRequest
+        {
+            Model = TestModel,
+            Messages = new List<Message>
+            {
+                Message.FromUser("IMPORTANT: You MUST call the test_client_tool function with value='hello'. Do not respond with anything else, just call the tool.")
+            }
+        };
+
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new MemoryStream();
+
+        LogInfo("Testing client-side tool execution tracking...");
+        
+        // Call StreamAsSseAsync and check if we got client tool calls
+        var result = await client.StreamAsSseAsync(request, httpContext.Response);
+
+        LogInfo($"Tool executions tracked in StreamingResult: {result.ToolExecutions.Count}");
+        
+        if (result.ToolExecutions.Count > 0)
+        {
+            foreach (var tool in result.ToolExecutions)
+            {
+                LogInfo($"  - {tool.ToolName}");
+                LogInfo($"    Arguments: {tool.Arguments}");
+                LogInfo($"    Result: {tool.Result}");
+                LogInfo($"    ToolId: {tool.ToolId ?? "N/A"}");
+            }
+        }
+        
+        Assert.NotNull(result);
+        
+        // Check if we got any tool_client messages in the response stream
+        // by reading the SSE events from the response body
+        httpContext.Response.Body.Position = 0;
+        var responseContent = await new StreamReader(httpContext.Response.Body).ReadToEndAsync();
+        var hasClientToolEvent = responseContent.Contains("\"type\":\"tool_client\"");
+        
+        if (!hasClientToolEvent)
+        {
+            LogWarning("⚠️ Model did not call client-side tool - SKIPPING TEST (model behavior unreliable)");
+            return;
+        }
+        
+        LogInfo("✓ Client tool event found in SSE stream");
+        
+        // HARD ASSERTION: If we saw client tool events in the SSE stream, they MUST be tracked in ToolExecutions
+        Assert.True(result.ToolExecutions.Count > 0, 
+            $"BUG DETECTED: SSE stream had tool_client event(s), but StreamingResult.ToolExecutions is empty! Client-side tools are not being tracked.");
+        
+        var clientToolExecution = result.ToolExecutions.FirstOrDefault(t => t.ToolName == "test_client_tool");
+        Assert.NotNull(clientToolExecution);
+        Assert.NotNull(clientToolExecution.ToolId);
+        Assert.Contains("hello", clientToolExecution.Arguments);
+        
+        LogSuccess($"✓ Client-side tool execution successfully tracked in telemetry! ({result.ToolExecutions.Count} tool(s))");
+    }
+    
+    public class TestClientToolParams
+    {
+        public string Value { get; set; } = string.Empty;
+    }
+    
+    public class TestClientTool : VoidTool<TestClientToolParams>
+    {
+        public override string Name => "test_client_tool";
+        public override string Description => "A test client-side tool";
+        public override ToolMode Mode => ToolMode.ClientSide;
+        
+        protected override void HandleVoid(TestClientToolParams parameters) { }
     }
     
     [Fact]

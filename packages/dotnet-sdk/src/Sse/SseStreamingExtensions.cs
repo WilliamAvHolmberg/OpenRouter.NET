@@ -211,6 +211,14 @@ public static class SseStreamingExtensions
                 // Queue tool result messages for client-side tools (will be added after assistant message)
                 if (chunk.ClientTool != null)
                 {
+                    toolExecutions.Add(new ToolExecutionInfo
+                    {
+                        ToolName = chunk.ClientTool.ToolName,
+                        Arguments = chunk.ClientTool.Arguments,
+                        Result = "Client-side tool invoked",
+                        ToolId = chunk.ClientTool.ToolId
+                    });
+                    
                     var toolResponse = new Message
                     {
                         Role = "tool",
