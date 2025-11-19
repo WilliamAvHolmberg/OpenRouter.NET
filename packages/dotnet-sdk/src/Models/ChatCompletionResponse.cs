@@ -48,5 +48,8 @@ public class ResponseUsage
 
     [JsonPropertyName("total_tokens")]
     public int TotalTokens { get; set; }
+
+    [JsonPropertyName("total_cost")]
+    public decimal? TotalCost { get; set; }
 }
 

@@ -35,6 +35,47 @@ record ChatRequest(string Message);
 
 That's it! One line: `await client.StreamAsSseAsync(request, context.Response);`
 
+## Telemetry & Observability
+
+`StreamAsSseAsync()` returns a `StreamingResult` that provides comprehensive telemetry data **after** streaming completes:
+
+```csharp
+var result = await client.StreamAsSseAsync(request, context.Response);
+
+// Access telemetry data
+Console.WriteLine($"Tokens used: {result.Usage?.TotalTokens ?? 0}");
+Console.WriteLine($"Time to first token: {result.TimeToFirstToken?.TotalMilliseconds ?? 0}ms");
+Console.WriteLine($"Total time: {result.TotalElapsed.TotalMilliseconds}ms");
+Console.WriteLine($"Chunks received: {result.ChunkCount}");
+Console.WriteLine($"Finish reason: {result.FinishReason}");
+
+// Track tool performance
+foreach (var tool in result.ToolExecutions)
+{
+    Console.WriteLine($"Tool {tool.ToolName} executed in {tool.ExecutionTime?.TotalMilliseconds ?? 0}ms");
+}
+
+// Access the messages
+foreach (var message in result.Messages)
+{
+    Console.WriteLine($"{message.Role}: {message.Content}");
+}
+```
+
+### StreamingResult Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Messages` | `List<Message>` | Complete conversation history (assistant + tool messages) |
+| `Usage` | `ResponseUsage?` | Token counts (prompt, completion, total) |
+| `FinishReason` | `string?` | Why streaming stopped ("stop", "length", "tool_calls") |
+| `TimeToFirstToken` | `TimeSpan?` | Time from request start to first token |
+| `TotalElapsed` | `TimeSpan` | Total streaming duration |
+| `ChunkCount` | `int` | Number of chunks received |
+| `ToolExecutions` | `List<ToolExecutionInfo>` | Server-side tool execution details |
+| `RequestId` | `string?` | API request ID for debugging |
+| `Model` | `string?` | Actual model used by the API |
+
 ## What Gets Streamed
 
 The helper automatically converts all `StreamChunk` events into standardized SSE events:

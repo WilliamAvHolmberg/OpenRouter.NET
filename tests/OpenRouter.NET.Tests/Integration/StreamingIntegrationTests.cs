@@ -136,10 +136,21 @@ public class StreamingIntegrationTests : IntegrationTestBase
             
             if (chunk.Completion != null)
             {
-                completionMetadata = chunk.Completion;
-                LogSuccess($"Completion received: {chunk.Completion.FinishReason}");
-                LogInfo($"  Model: {chunk.Completion.Model}");
-                LogInfo($"  ID: {chunk.Completion.Id}");
+                // Only update completionMetadata if we have a finish reason
+                // (usage-only chunks may have Completion but no FinishReason)
+                if (chunk.Completion.FinishReason != null)
+                {
+                    completionMetadata = chunk.Completion;
+                    LogSuccess($"Completion received: {chunk.Completion.FinishReason}");
+                    LogInfo($"  Model: {chunk.Completion.Model}");
+                    LogInfo($"  ID: {chunk.Completion.Id}");
+                }
+                
+                // Log usage data if present
+                if (chunk.Completion.Usage != null)
+                {
+                    LogInfo($"  Usage: {chunk.Completion.Usage.TotalTokens} tokens (prompt: {chunk.Completion.Usage.PromptTokens}, completion: {chunk.Completion.Usage.CompletionTokens})");
+                }
             }
         }
         

@@ -36,6 +36,11 @@ interface UseChatOptions {
   defaultModel?: string;
   config?: ClientConfig;
   onClientTool?: (event: ToolClientEvent) => void;
+  onCompleted?: (event: CompletionEvent) => void;
+  onError?: (event: ErrorEvent) => void;
+  onArtifactCompleted?: (event: ArtifactCompletedEvent) => void;
+  onToolCompleted?: (event: ToolCompletedEvent) => void;
+  onToolError?: (event: ToolErrorEvent) => void;
 }
 
 export function useOpenRouterChat({
@@ -44,6 +49,11 @@ export function useOpenRouterChat({
   defaultModel = 'openai/gpt-4o',
   config,
   onClientTool,
+  onCompleted,
+  onError: onErrorCallback,
+  onArtifactCompleted: onArtifactCompletedCallback,
+  onToolCompleted: onToolCompletedCallback,
+  onToolError: onToolErrorCallback,
 }: UseChatOptions): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -305,6 +315,8 @@ export function useOpenRouterChat({
                   return block;
                 }),
               }));
+              
+              onArtifactCompletedCallback?.(event);
             },
 
             onToolExecuting: (event: ToolExecutingEvent) => {
@@ -341,6 +353,8 @@ export function useOpenRouterChat({
                   return block;
                 }),
               }));
+              
+              onToolCompletedCallback?.(event);
             },
 
             onToolError: (event: ToolErrorEvent) => {
@@ -357,6 +371,8 @@ export function useOpenRouterChat({
                   return block;
                 }),
               }));
+              
+              onToolErrorCallback?.(event);
             },
 
             onComplete: (event: CompletionEvent) => {
@@ -371,6 +387,8 @@ export function useOpenRouterChat({
                 },
               }));
               setIsStreaming(false);
+              
+              onCompleted?.(event);
             },
 
             onError: (event: ErrorEvent) => {
@@ -380,6 +398,8 @@ export function useOpenRouterChat({
                 ...msg,
                 isStreaming: false,
               }));
+              
+              onErrorCallback?.(event);
             },
           }
         );

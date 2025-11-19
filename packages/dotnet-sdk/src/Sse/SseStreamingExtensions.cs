@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using OpenRouter.NET.Models;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
@@ -7,7 +8,7 @@ namespace OpenRouter.NET.Sse;
 
 public static class SseStreamingExtensions
 {
-    public static async Task<List<Message>> StreamAsSseAsync(
+    public static async Task<StreamingResult> StreamAsSseAsync(
         this OpenRouterClient client,
         ChatCompletionRequest request,
         HttpResponse response,
@@ -16,7 +17,7 @@ public static class SseStreamingExtensions
         return await StreamAsSseAsync(client, request, response, null, cancellationToken);
     }
 
-    public static async Task<List<Message>> StreamAsSseAsync(
+    public static async Task<StreamingResult> StreamAsSseAsync(
         this OpenRouterClient client,
         ChatCompletionRequest request,
         HttpResponse response,
@@ -38,13 +39,60 @@ public static class SseStreamingExtensions
         var currentMessageAdded = false;
         var pendingClientToolResponses = new List<Message>();
 
+        // Telemetry tracking
+        var stopwatch = Stopwatch.StartNew();
+        var chunkCount = 0;
+        var artifactCount = 0;
+        TimeSpan? timeToFirstToken = null;
+        ResponseUsage? usage = null;
+        string? finishReason = null;
+        string? requestId = null;
+        string? model = null;
+        var toolExecutions = new List<ToolExecutionInfo>();
+
         try
         {
             await foreach (var chunk in client.StreamAsync(request, cancellationToken))
             {
+                chunkCount++;
                 var events = SseChunkMapper.MapChunk(chunk);
                 lastChunkIndex = chunk.ChunkIndex;
                 lastElapsedMs = chunk.ElapsedTime.TotalMilliseconds;
+
+                // Capture first token timing
+                if (timeToFirstToken == null && chunk.TextDelta != null)
+                {
+                    timeToFirstToken = chunk.ElapsedTime;
+                }
+
+                // Capture completion metadata
+                if (chunk.Completion != null)
+                {
+                    if (chunk.Completion.Usage != null)
+                        usage = chunk.Completion.Usage;
+                    if (chunk.Completion.FinishReason != null)
+                        finishReason = chunk.Completion.FinishReason;
+                    if (chunk.Completion.Id != null)
+                        requestId = chunk.Completion.Id;
+                    if (chunk.Completion.Model != null)
+                        model = chunk.Completion.Model;
+                }
+                
+                // Also check Raw.Usage as fallback (some providers send usage in separate chunks)
+                if (usage == null && chunk.Raw?.Usage != null)
+                {
+                    usage = chunk.Raw.Usage;
+                }
+                
+                // Capture model and ID from raw chunk if not already set
+                if (model == null && chunk.Raw?.Model != null)
+                {
+                    model = chunk.Raw.Model;
+                }
+                if (requestId == null && chunk.Raw?.Id != null)
+                {
+                    requestId = chunk.Raw.Id;
+                }
 
                 // Accumulate text content
                 if (chunk.TextDelta != null)
@@ -125,6 +173,15 @@ public static class SseStreamingExtensions
                 // Add tool result messages for server-side tools
                 if (chunk.ServerTool?.State == ToolCallState.Completed)
                 {
+                    toolExecutions.Add(new ToolExecutionInfo
+                    {
+                        ToolName = chunk.ServerTool.ToolName,
+                        Arguments = chunk.ServerTool.Arguments,
+                        Result = chunk.ServerTool.Result,
+                        ExecutionTime = chunk.ServerTool.ExecutionTime,
+                        ToolId = chunk.ServerTool.ToolId
+                    });
+                    
                     messages.Add(new Message
                     {
                         Role = "tool",
@@ -134,6 +191,15 @@ public static class SseStreamingExtensions
                 }
                 else if (chunk.ServerTool?.State == ToolCallState.Error)
                 {
+                    toolExecutions.Add(new ToolExecutionInfo
+                    {
+                        ToolName = chunk.ServerTool.ToolName,
+                        Arguments = chunk.ServerTool.Arguments,
+                        Result = $"ERROR: {chunk.ServerTool.Error}",
+                        ExecutionTime = chunk.ServerTool.ExecutionTime,
+                        ToolId = chunk.ServerTool.ToolId
+                    });
+                    
                     messages.Add(new Message
                     {
                         Role = "tool",
@@ -161,6 +227,12 @@ public static class SseStreamingExtensions
                     {
                         pendingClientToolResponses.Add(toolResponse);
                     }
+                }
+
+                // Track artifact completions
+                if (chunk.Artifact is ArtifactCompleted)
+                {
+                    artifactCount++;
                 }
 
                 foreach (var sseEvent in events)
@@ -219,7 +291,21 @@ public static class SseStreamingExtensions
             await writer.WriteEventAsync(errorEvent, cancellationToken);
         }
 
-        return messages;
+        stopwatch.Stop();
+
+        return new StreamingResult
+        {
+            Messages = messages,
+            Usage = usage,
+            FinishReason = finishReason ?? "stop",
+            TimeToFirstToken = timeToFirstToken,
+            TotalElapsed = stopwatch.Elapsed,
+            ChunkCount = chunkCount,
+            ArtifactCount = artifactCount,
+            ToolExecutions = toolExecutions,
+            RequestId = requestId,
+            Model = model
+        };
     }
 
     public static async IAsyncEnumerable<SseEvent> StreamAsSseEventsAsync(

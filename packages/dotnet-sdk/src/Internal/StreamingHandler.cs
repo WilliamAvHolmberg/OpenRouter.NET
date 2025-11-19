@@ -318,15 +318,16 @@ internal class StreamingHandler
                 Raw = rawChunk
             };
 
-            if (choice?.FinishReason != null)
+            if (choice?.FinishReason != null || rawChunk.Usage != null)
             {
                 textChunk = textChunk with
                 {
                     Completion = new CompletionMetadata
                     {
-                        FinishReason = choice.FinishReason,
+                        FinishReason = choice?.FinishReason,
                         Model = rawChunk.Model,
-                        Id = rawChunk.Id
+                        Id = rawChunk.Id,
+                        Usage = rawChunk.Usage
                     }
                 };
             }
@@ -334,12 +335,30 @@ internal class StreamingHandler
             chunksToYield.Add(textChunk);
             currentIsFirstChunk = false;
         }
+        else if (choice?.FinishReason != null || rawChunk.Usage != null)
+        {
+            // No text delta, but we have finish reason or usage - emit metadata chunk
+            chunksToYield.Add(new StreamChunk
+            {
+                IsFirstChunk = currentIsFirstChunk,
+                ElapsedTime = stopwatch?.Elapsed ?? TimeSpan.Zero,
+                ChunkIndex = chunkIndex++,
+                Completion = new CompletionMetadata
+                {
+                    FinishReason = choice?.FinishReason,
+                    Model = rawChunk.Model,
+                    Id = rawChunk.Id,
+                    Usage = rawChunk.Usage
+                },
+                Raw = rawChunk
+            });
+        }
 
         isFirstChunk = currentIsFirstChunk;
     }
 
     /// <summary>
-    /// Processes non-text content (tool calls, finish reason)
+    /// Processes non-text content (tool calls, finish reason, usage)
     /// </summary>
     private void ProcessNonTextContent(
         MessageDelta? delta,
@@ -366,8 +385,8 @@ internal class StreamingHandler
             }
         }
 
-        // Handle finish reason - always emit if present, even with tool calls
-        if (choice?.FinishReason != null)
+        // Handle finish reason OR usage data - emit if either is present
+        if (choice?.FinishReason != null || rawChunk.Usage != null)
         {
             chunksToYield.Add(new StreamChunk
             {
@@ -376,16 +395,17 @@ internal class StreamingHandler
                 ChunkIndex = chunkIndex++,
                 Completion = new CompletionMetadata
                 {
-                    FinishReason = choice.FinishReason,
+                    FinishReason = choice?.FinishReason,
                     Model = rawChunk.Model,
-                    Id = rawChunk.Id
+                    Id = rawChunk.Id,
+                    Usage = rawChunk.Usage
                 },
                 Raw = rawChunk
             });
         }
         else if (delta?.ToolCalls == null || delta.ToolCalls.Length == 0)
         {
-            // Emit empty chunk only if no content and no finish reason
+            // Emit empty chunk only if no content, no finish reason, no usage, and no tool calls
             chunksToYield.Add(new StreamChunk
             {
                 IsFirstChunk = isFirstChunk,
