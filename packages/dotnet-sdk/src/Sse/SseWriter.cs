@@ -44,7 +44,6 @@ public class SseWriter
     {
         response.ContentType = "text/event-stream";
         response.Headers["Cache-Control"] = "no-cache";
-        response.Headers["Connection"] = "keep-alive";
         response.Headers["X-Accel-Buffering"] = "no";
     }
 }

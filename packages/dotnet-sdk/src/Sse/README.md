@@ -588,7 +588,6 @@ await foreach (var sseEvent in client.StreamAsSseEventsAsync(request))
 // 40+ lines of repetitive code
 Response.ContentType = "text/event-stream";
 Response.Headers.Append("Cache-Control", "no-cache");
-Response.Headers.Append("Connection", "keep-alive");
 
 await foreach (var chunk in client.StreamAsync(request))
 {

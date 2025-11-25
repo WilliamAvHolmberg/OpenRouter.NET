@@ -37,6 +37,38 @@ export function ChatInterface() {
     config: {
       debug: true,
     },
+    onCompleted: (event) => {
+      console.log('🎉 [CALLBACK] onCompleted called:', event);
+      console.log('  - finishReason:', event.finishReason);
+      console.log('  - model:', event.model);
+      console.log('  - id:', event.id);
+    },
+    onError: (event) => {
+      console.error('❌ [CALLBACK] onError called:', event);
+      console.error('  - message:', event.message);
+      console.error('  - details:', event.details);
+    },
+    onArtifactCompleted: (event) => {
+      console.log('📦 [CALLBACK] onArtifactCompleted called:', event);
+      console.log('  - artifactId:', event.artifactId);
+      console.log('  - title:', event.title);
+      console.log('  - artifactType:', event.artifactType);
+      console.log('  - language:', event.language);
+      console.log('  - content length:', event.content.length);
+    },
+    onToolCompleted: (event) => {
+      console.log('🔧 [CALLBACK] onToolCompleted called:', event);
+      console.log('  - toolName:', event.toolName);
+      console.log('  - toolId:', event.toolId);
+      console.log('  - result:', event.result);
+      console.log('  - executionTimeMs:', event.executionTimeMs);
+    },
+    onToolError: (event) => {
+      console.error('⚠️ [CALLBACK] onToolError called:', event);
+      console.error('  - toolName:', event.toolName);
+      console.error('  - toolId:', event.toolId);
+      console.error('  - error:', event.error);
+    },
   });
 
   const { models, loading: modelsLoading } = useOpenRouterModels('/api/models');

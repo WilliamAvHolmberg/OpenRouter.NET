@@ -45,6 +45,8 @@ public class Message
     }
 }
 
+[JsonDerivedType(typeof(TextContent), "text")]
+[JsonDerivedType(typeof(ImageContent), "image_url")]
 public abstract class ContentPart
 {
     [JsonPropertyName("type")]

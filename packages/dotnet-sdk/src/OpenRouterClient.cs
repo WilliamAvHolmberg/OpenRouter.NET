@@ -9,7 +9,7 @@ using OpenRouter.NET.Tools;
 
 namespace OpenRouter.NET;
 
-public class OpenRouterClient
+public class OpenRouterClient : IDisposable
 {
     private readonly HttpClient _httpClient;
     private readonly bool _disposeHttpClient;
