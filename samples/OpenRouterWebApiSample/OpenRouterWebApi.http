@@ -1,0 +1,99 @@
+@OpenRouterWebApi_HostAddress = http://localhost:5210
+
+### Get all models
+GET {{OpenRouterWebApi_HostAddress}}/api/models
+Accept: application/json
+
+### Get popular models
+GET {{OpenRouterWebApi_HostAddress}}/api/models/popular
+Accept: application/json
+
+### Get account limits
+GET {{OpenRouterWebApi_HostAddress}}/api/models/limits
+Accept: application/json
+
+### Basic chat
+POST {{OpenRouterWebApi_HostAddress}}/api/chat/basic
+Content-Type: application/json
+
+{
+  "model": "anthropic/claude-3.5-sonnet",
+  "message": "What is the capital of France?",
+  "systemPrompt": "You are a helpful assistant.",
+  "temperature": 0.7,
+  "maxTokens": 500
+}
+
+### Stream chat
+POST {{OpenRouterWebApi_HostAddress}}/api/chat/stream
+Content-Type: application/json
+
+{
+  "model": "anthropic/claude-3.5-sonnet",
+  "message": "Tell me a short story about a robot.",
+  "systemPrompt": "You are a creative storyteller."
+}
+
+### Conversation with history
+POST {{OpenRouterWebApi_HostAddress}}/api/chat/conversation
+Content-Type: application/json
+
+{
+  "model": "anthropic/claude-3.5-sonnet",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is 2+2?"
+    },
+    {
+      "role": "assistant",
+      "content": "2+2 equals 4."
+    },
+    {
+      "role": "user",
+      "content": "What about if we multiply that by 3?"
+    }
+  ],
+  "temperature": 0.7
+}
+
+### Generate with artifacts
+POST {{OpenRouterWebApi_HostAddress}}/api/chat/artifacts
+Content-Type: application/json
+
+{
+  "model": "anthropic/claude-3.5-sonnet",
+  "prompt": "Create a simple Python function to calculate fibonacci numbers"
+}
+
+### Multimodal chat with images
+POST {{OpenRouterWebApi_HostAddress}}/api/chat/multimodal
+Content-Type: application/json
+
+{
+  "model": "openai/gpt-4o",
+  "message": "What do you see in this image?",
+  "imageUrls": [
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/d/dd/Gfp-wisconsin-madison-the-nature-boardwalk.jpg/2560px-Gfp-wisconsin-madison-the-nature-boardwalk.jpg"
+  ]
+}
+
+### Chat with tools (non-streaming)
+POST {{OpenRouterWebApi_HostAddress}}/api/chat/tools
+Content-Type: application/json
+
+{
+  "model": "anthropic/claude-3.5-sonnet",
+  "message": "What is 125 multiplied by 8, then add 50 to that result?"
+}
+
+### Chat with tools (streaming)
+POST {{OpenRouterWebApi_HostAddress}}/api/chat/tools/stream
+Content-Type: application/json
+
+{
+  "model": "anthropic/claude-3.5-sonnet",
+  "message": "Calculate (15 + 25) * 3, then divide by 2"
+}
+
+###
