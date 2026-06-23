@@ -1,0 +1,334 @@
+# OpenRouter.NET SDK - Comprehensive Documentation
+
+<llms-txt>
+  <metadata>
+    <title>OpenRouter.NET - .NET SDK for OpenRouter API</title>
+    <version>0.1.0</version>
+    <requires>.NET 6.0 or later</requires>
+    <namespace-root>OpenRouter.NET</namespace-root>
+  </metadata>
+
+  <section id="overview">
+    <title>Overview</title>
+    <content>
+    OpenRouter.NET is a comprehensive .NET SDK for interacting with the OpenRouter API. It provides:
+    - Streaming and non-streaming chat completions
+    - Function calling and tool integration
+    - Artifact handling
+    - Conversation management
+    - Type-safe request/response models
+    - Extensive configuration options
+    </content>
+  </section>
+
+  <section id="installation">
+    <title>Installation</title>
+    <content>
+    Install via NuGet:
+    ```bash
+    dotnet add package OpenRouter.NET
+    ```
+
+    Required using statements:
+    ```csharp
+    using OpenRouter.NET;
+    using OpenRouter.NET.Models;
+    ```
+    </content>
+  </section>
+
+  <section id="basic-usage">
+    <title>Basic Usage</title>
+    <content>
+    Create a client and send a basic chat completion request:
+
+    ```csharp
+    var client = new OpenRouterClient("your-api-key");
+    
+    var request = new ChatCompletionRequest
+    {
+        Messages = new List<Message>
+        {
+            Message.FromUser("Hello, how are you?")
+        },
+        Model = "gpt-3.5-turbo"
+    };
+
+    var response = await client.CreateChatCompletionAsync(request);
+    var reply = response.Choices[0].Message.Content;
+    ```
+    </content>
+  </section>
+
+  <section id="configuration">
+    <title>Client Configuration</title>
+    <content>
+    The client can be configured with various options:
+
+    ```csharp
+    var options = new OpenRouterClientOptions
+    {
+        ApiKey = "your-api-key",
+        SiteUrl = "https://your-site.com",  // Optional: HTTP referer
+        SiteName = "Your App",              // Optional: X-Title header
+        HttpClient = customHttpClient,       // Optional: Custom HttpClient
+        OnLogMessage = (msg) => Console.WriteLine(msg), // Optional: Logging
+        BaseUrl = "https://openrouter.ai/api/v1"  // Optional: API endpoint
+    };
+
+    var client = new OpenRouterClient(options);
+    ```
+    </content>
+  </section>
+
+  <section id="streaming">
+    <title>Streaming Support</title>
+    <content>
+    Multiple streaming patterns are supported:
+
+    1. Basic text streaming:
+    ```csharp
+    await client.StreamTextAsync(request, 
+        text => Console.Write(text));
+    ```
+
+    2. Advanced streaming with events:
+    ```csharp
+    await client.StreamTextAsync(request,
+        onText: text => Console.Write(text),
+        onFirstChunk: chunk => Console.WriteLine($"Model: {chunk.Raw.Model}"),
+        onComplete: completion => Console.WriteLine($"Finished: {completion.FinishReason}"));
+    ```
+
+    3. Raw chunk streaming:
+    ```csharp
+    await foreach (var chunk in client.StreamAsync(request))
+    {
+        if (chunk.TextDelta != null)
+            Console.Write(chunk.TextDelta);
+        if (chunk.ToolCallDelta != null)
+            HandleToolCall(chunk.ToolCallDelta);
+        if (chunk.Artifact != null)
+            HandleArtifact(chunk.Artifact);
+    }
+    ```
+
+    4. Accumulate streamed response:
+    ```csharp
+    var message = await client.StreamAndAccumulateAsync(request,
+        onChunk: chunk => UpdateUI(chunk));
+    ```
+    </content>
+  </section>
+
+  <section id="tools">
+    <title>Function Calling and Tools</title>
+    <content>
+    The SDK supports function calling with automatic tool execution:
+
+    1. Register tools:
+    ```csharp
+    client.RegisterTool(
+        name: "get_weather",
+        implementation: (args) => GetWeather(args),
+        description: "Get weather for a location",
+        parameters: new
+        {
+            type = "object",
+            properties = new
+            {
+                location = new
+                {
+                    type = "string",
+                    description = "City name"
+                }
+            },
+            required = new[] { "location" }
+        }
+    );
+    ```
+
+    2. Tool modes:
+    ```csharp
+    // Auto-execute mode (default)
+    client.RegisterTool("server_tool", 
+        implementation: HandleServerSide,
+        description: "Server-side tool",
+        parameters: schema,
+        mode: ToolMode.AutoExecute);
+
+    // Client-side execution
+    client.RegisterTool("client_tool",
+        implementation: null,
+        description: "Client-side tool",
+        parameters: schema,
+        mode: ToolMode.ClientSide);
+    ```
+
+    3. Tool loop configuration:
+    ```csharp
+    var request = new ChatCompletionRequest
+    {
+        Messages = messages,
+        ToolLoopConfig = new ToolLoopConfig
+        {
+            Enabled = true,
+            MaxIterations = 5,
+            TimeoutPerCall = TimeSpan.FromSeconds(30)
+        }
+    };
+    ```
+    </content>
+  </section>
+
+  <section id="artifacts">
+    <title>Artifact Handling</title>
+    <content>
+    The SDK supports collecting and processing artifacts from responses:
+
+    ```csharp
+    var artifacts = await client.CollectArtifactsAsync(request,
+        onText: text => Console.Write(text));
+
+    foreach (var artifact in artifacts)
+    {
+        Console.WriteLine($"""
+            Artifact: {artifact.Id}
+            Type: {artifact.Type}
+            Title: {artifact.Title}
+            Language: {artifact.Language}
+            Content: {artifact.Content}
+            """);
+    }
+    ```
+
+    Artifacts are automatically parsed from XML-like tags in the response:
+    ```xml
+    <artifact type="code" language="csharp" title="Example">
+    public class Example { }
+    </artifact>
+    ```
+    </content>
+  </section>
+
+  <section id="models">
+    <title>Models and Responses</title>
+    <content>
+    1. List available models:
+    ```csharp
+    var models = await client.GetModelsAsync();
+    foreach (var model in models)
+    {
+        Console.WriteLine($"{model.Id}: {model.Description}");
+    }
+    ```
+
+    2. Check usage limits:
+    ```csharp
+    var limits = await client.GetLimitsAsync();
+    Console.WriteLine($"RPM: {limits.RateLimit.RequestsPerMinute}");
+    ```
+
+    3. Get generation info:
+    ```csharp
+    var info = await client.GetGenerationAsync(generationId);
+    Console.WriteLine($"Status: {info.Status}");
+    ```
+    </content>
+  </section>
+
+  <section id="error-handling">
+    <title>Error Handling</title>
+    <content>
+    The SDK provides specific exception types for different error cases:
+
+    ```csharp
+    try
+    {
+        var response = await client.CreateChatCompletionAsync(request);
+    }
+    catch (OpenRouterAuthException ex)
+    {
+        // Invalid API key or authentication error
+    }
+    catch (OpenRouterRateLimitException ex)
+    {
+        // Rate limit exceeded
+        var retryAfterSeconds = ex.RetryAfter;
+    }
+    catch (OpenRouterBadRequestException ex)
+    {
+        // Invalid request parameters
+    }
+    catch (OpenRouterModelNotFoundException ex)
+    {
+        // Requested model not found
+    }
+    catch (OpenRouterServerException ex)
+    {
+        // Server-side error (5xx)
+    }
+    catch (OpenRouterException ex)
+    {
+        // Generic API error
+    }
+    ```
+    </content>
+  </section>
+
+  <section id="best-practices">
+    <title>Best Practices</title>
+    <content>
+    1. Client Lifecycle:
+    - Create one client instance and reuse it
+    - Dispose the client when done if you created it with default HttpClient
+    - Use dependency injection in ASP.NET applications
+
+    2. Error Handling:
+    - Always handle OpenRouterException and its derived types
+    - Implement retry logic for rate limits using RetryAfter value
+    - Log error responses for debugging
+
+    3. Streaming:
+    - Use StreamTextAsync for simple text streaming
+    - Use StreamAndAccumulateAsync when you need the final message
+    - Handle cancellation tokens appropriately
+
+    4. Tools:
+    - Register tools before sending requests
+    - Use appropriate ToolMode based on execution context
+    - Implement tool error handling
+    - Set reasonable MaxIterations in ToolLoopConfig
+
+    5. Performance:
+    - Reuse HttpClient instances
+    - Use streaming for long responses
+    - Implement timeouts for tool executions
+    </content>
+  </section>
+
+  <section id="common-issues">
+    <title>Common Issues and Solutions</title>
+    <content>
+    1. Authentication Errors:
+    - Ensure API key is set correctly
+    - Check if API key has required permissions
+    - Verify API key format
+
+    2. Rate Limits:
+    - Implement exponential backoff
+    - Use RetryAfter value from OpenRouterRateLimitException
+    - Monitor usage with GetLimitsAsync
+
+    3. Streaming Issues:
+    - Handle network interruptions
+    - Implement timeout logic
+    - Use cancellation tokens
+
+    4. Tool Execution:
+    - Validate tool arguments
+    - Handle tool timeouts
+    - Implement proper error responses
+    </content>
+  </section>
+</llms-txt>
